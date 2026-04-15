@@ -36,7 +36,7 @@ echo ""
 
 # Resolve script directory and project root paths
 SCRIPT_DIR="$(cd "$(dirname "$0")" > /dev/null 2>&1 || exit 1; pwd -P)"
-PROJECT_ROOT="$(cd $SCRIPT_DIR/.. > /dev/null 2>&1 || exit 1; pwd -P)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." > /dev/null 2>&1 || exit 1; pwd -P)"
 
 # Define project directories
 INFRA_DIR="$PROJECT_ROOT/infra"
@@ -59,14 +59,9 @@ fi
 
 PG_OK=false
 
-if pg_isready -q; then
-    # Check if bound to 0.0.0.0 so Docker Lambda containers can reach it
-    if ss -ltn 2>/dev/null | grep -q '0.0.0.0:5432'; then
-        PG_OK=true
-        echo -e "  ✓ PostgreSQL is running and bound to 0.0.0.0:5432"
-    else
-        echo -e "  ⚠ PostgreSQL running but not bound to 0.0.0.0, reconfiguring..."
-    fi
+if pg_isready -h 127.0.0.1 -p 5432 -q; then
+    PG_OK=true
+    echo -e "  ✓ PostgreSQL is running and answering on 5432"
 fi
 
 if [ "$PG_OK" = false ]; then
@@ -111,8 +106,8 @@ if [ "$PG_OK" = false ]; then
 
     # Wait for PostgreSQL to be ready and bound
     for i in {1..10}; do
-        if pg_isready -q && ss -ltn 2>/dev/null | grep -q '0.0.0.0:5432'; then
-            echo -e "  ✓ PostgreSQL started and bound to 0.0.0.0:5432"
+        if pg_isready -h 127.0.0.1 -p 5432 -q; then
+            echo -e "  ✓ PostgreSQL started and answering on 5432"
             break
         fi
         if [ "$i" -eq 10 ]; then
@@ -261,7 +256,7 @@ echo -e "  ✓ Docker is running"
 
 # Check if LocalStack is running
 LOCALSTACK_OK=false
-LOCALSTACK_IMAGE="${LOCALSTACK_IMAGE:-localstack/localstack-pro}"
+LOCALSTACK_IMAGE="${LOCALSTACK_IMAGE:-localstack/localstack}"
 if curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
     # Verify the correct image is running
     RUNNING_IMAGE=$(docker inspect localstack-main --format '{{.Config.Image}}' 2>/dev/null || echo "")
@@ -286,7 +281,8 @@ if [ "$LOCALSTACK_OK" = false ]; then
     fi
 
     echo -e "  ⚠ LocalStack not running, starting it..."
-    localstack start -d
+    export LOCALSTACK_ACKNOWLEDGE_ACCOUNT_REQUIREMENT=1
+    IMAGE_NAME="localstack/localstack" localstack start -d
 
     # Wait for LocalStack to be ready (up to 30 seconds)
     for i in {1..30}; do
@@ -425,14 +421,15 @@ if [ "$BACKEND_OK" = false ]; then
     echo -e "  ⚠ Backend not deployed or not working, deploying..."
 
     # Deploy backend
-    $SCRIPT_DIR/deploy-backend.sh local > /tmp/backend-deploy.log 2>&1 || {
+    "$SCRIPT_DIR/deploy-backend.sh" local > /tmp/backend-deploy.log 2>&1 || {
         echo -e "  ⚠ Backend deployment failed, resetting LocalStack and retrying..."
 
         # Stop LocalStack, clear stale state, restart
         localstack stop 2>/dev/null || true
         docker stop localstack-main 2>/dev/null || true
         sleep 5
-        localstack start -d
+        export LOCALSTACK_ACKNOWLEDGE_ACCOUNT_REQUIREMENT=1
+        IMAGE_NAME="localstack/localstack" localstack start -d
 
         # Wait for LocalStack to be ready
         for i in {1..30}; do
@@ -448,7 +445,7 @@ if [ "$BACKEND_OK" = false ]; then
         done
 
         # Retry deploy against clean LocalStack
-        $SCRIPT_DIR/deploy-backend.sh local > /tmp/backend-deploy.log 2>&1 || {
+        "$SCRIPT_DIR/deploy-backend.sh" local > /tmp/backend-deploy.log 2>&1 || {
             echo -e "  ✗ Backend deployment failed after LocalStack reset"
             tail -n 50 /tmp/backend-deploy.log | sed 's/^/    /'
             exit 1

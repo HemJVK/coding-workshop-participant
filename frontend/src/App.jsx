@@ -1,35 +1,37 @@
-import { useState } from 'react'
-import reactLogo from '/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { Routes, Route, Navigate } from 'react-router-dom';
+import AuthGuard from './components/AuthGuard';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import EmployeesPage from './pages/EmployeesPage';
+import EmployeeDetailPage from './pages/EmployeeDetailPage';
+import ReviewsPage from './pages/ReviewsPage';
+import CompetenciesPage from './pages/CompetenciesPage';
+import DevelopmentPage from './pages/DevelopmentPage';
+import TrainingPage from './pages/TrainingPage';
+import GoalsPage from './pages/GoalsPage';
+import AdminPage from './pages/AdminPage';
 
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <Routes>
+      {/* Public */}
+      <Route path="/login" element={<LoginPage />} />
 
-export default App
+      {/* Protected — any authenticated user */}
+      <Route path="/" element={<AuthGuard><DashboardPage /></AuthGuard>} />
+      <Route path="/employees" element={<AuthGuard><EmployeesPage /></AuthGuard>} />
+      <Route path="/employees/:id" element={<AuthGuard><EmployeeDetailPage /></AuthGuard>} />
+      <Route path="/reviews" element={<AuthGuard><ReviewsPage /></AuthGuard>} />
+      <Route path="/competencies" element={<AuthGuard><CompetenciesPage /></AuthGuard>} />
+      <Route path="/development" element={<AuthGuard><DevelopmentPage /></AuthGuard>} />
+      <Route path="/training" element={<AuthGuard><TrainingPage /></AuthGuard>} />
+      <Route path="/goals" element={<AuthGuard><GoalsPage /></AuthGuard>} />
+
+      {/* Admin only */}
+      <Route path="/admin" element={<AuthGuard roles={['admin']}><AdminPage /></AuthGuard>} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

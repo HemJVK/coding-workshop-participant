@@ -63,7 +63,9 @@ const server = http.createServer((req, res) => {
   }
 
   const endpointName = pathParts[1];
-  const targetUrl = endpoints[endpointName] + (parsedUrl.search || '');
+  // forward sub-path segments (e.g. /api/employees-service/42/reviews → /42/reviews)
+  const subPath = '/' + pathParts.slice(2).join('/');
+  const targetUrl = endpoints[endpointName] + (subPath === '/' ? '' : subPath) + (parsedUrl.search || '');
 
   if (!targetUrl) {
     res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -100,7 +102,9 @@ const server = http.createServer((req, res) => {
       'accept': headers.accept || 'application/json',
       'content-type': headers['content-type'] || 'application/json',
       'user-agent': headers['user-agent'] || 'proxy-server',
-      'host': target.host
+      'host': target.host,
+      // Forward auth token so JWT is validated by Lambda
+      ...(headers.authorization ? { 'authorization': headers.authorization } : {}),
     }
   };
 

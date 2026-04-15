@@ -94,6 +94,16 @@ def row_to_dict(row):
     return dict(zip(keys, row))
 
 
+def check_manager_access(conn, user_id, target_employee_id):
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT manager_id FROM employees WHERE id = %s", (target_employee_id,))
+            row = cur.fetchone()
+            return bool(row and str(row[0]) == str(user_id))
+    except Exception:
+        return False
+
+
 def handle_list(event):
     user = get_current_user(event)
     if not user:
@@ -115,6 +125,9 @@ def handle_list(event):
         query += " AND status = %s"; args.append(status)
     if year:
         query += " AND year = %s"; args.append(year)
+    if user["role"] == "manager":
+        query += " AND employee_id IN (SELECT id FROM employees WHERE manager_id = %s)"
+        args.append(user["sub"])
     query += " ORDER BY created_at DESC"
 
     conn = get_db_connection(PG_CONFIG)
@@ -138,13 +151,15 @@ def handle_get_one(event, review_id):
             row = cur.fetchone()
         if not row:
             return not_found("Review not found")
+        if user["role"] == "manager" and not check_manager_access(conn, user["sub"], row[1]):
+            return forbidden("Not authorized to view this review")
         return response(200, row_to_dict(row))
     finally:
         release_connection(conn)
 
 
 def handle_create(event, body):
-    user, err = require_roles(event, ["admin", "manager", "contributor"])
+    user, err = require_roles(event, ["admin", "manager", "hr"])
     if err:
         return err
     employee_id = body.get("employee_id")
@@ -161,6 +176,10 @@ def handle_create(event, body):
             return bad_request("Invalid rating value")
 
     conn = get_db_connection(PG_CONFIG)
+    if user["role"] == "manager" and not check_manager_access(conn, user["sub"], employee_id):
+        release_connection(conn)
+        return forbidden("Not authorized to create review for this employee")
+
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -179,7 +198,7 @@ def handle_create(event, body):
 
 
 def handle_update(event, review_id, body):
-    user, err = require_roles(event, ["admin", "manager", "contributor"])
+    user, err = require_roles(event, ["admin", "manager", "hr"])
     if err:
         return err
     fields = ["period", "year", "rating", "comments", "strengths", "improvements", "status", "reviewer_id"]
@@ -193,6 +212,16 @@ def handle_update(event, review_id, body):
         return bad_request("No fields to update")
     params.append(review_id)
     conn = get_db_connection(PG_CONFIG)
+
+    if user["role"] == "manager":
+        cur = conn.cursor()
+        cur.execute("SELECT employee_id FROM performance_reviews WHERE id = %s", (review_id,))
+        emp_row = cur.fetchone()
+        cur.close()
+        if not emp_row or not check_manager_access(conn, user["sub"], emp_row[0]):
+            release_connection(conn)
+            return forbidden("Not authorized to update this review")
+
     try:
         with conn.cursor() as cur:
             cur.execute(f"UPDATE performance_reviews SET {', '.join(updates)}, updated_at = NOW() WHERE id = %s RETURNING id, employee_id, reviewer_id, period, year, rating, comments, strengths, improvements, status, created_at, updated_at", params)

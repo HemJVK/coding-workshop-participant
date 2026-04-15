@@ -20,7 +20,7 @@ const EMPTY = { employee_id: '', title: '', objectives: '', actions: '', resourc
 
 export default function DevelopmentPage() {
   const user = authService.getUser();
-  const canWrite = ['admin', 'manager'].includes(user?.role);
+  const canWrite = ['admin', 'manager', 'hr'].includes(user?.role);
 
   const [plans, setPlans] = useState([]);
   const [employees, setEmployees] = useState([]);

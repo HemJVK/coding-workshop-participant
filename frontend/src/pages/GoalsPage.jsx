@@ -24,7 +24,7 @@ const EMPTY = { employee_id: '', title: '', description: '', status: 'not_starte
 
 export default function GoalsPage() {
   const user = authService.getUser();
-  const canWrite = ['admin', 'manager', 'contributor'].includes(user?.role);
+  const canWrite = ['admin', 'manager', 'hr'].includes(user?.role);
 
   const [goals, setGoals] = useState([]);
   const [employees, setEmployees] = useState([]);

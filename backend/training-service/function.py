@@ -92,6 +92,16 @@ def row_to_dict(row):
     return dict(zip(keys, row))
 
 
+def check_manager_access(conn, user_id, target_employee_id):
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT manager_id FROM employees WHERE id = %s", (target_employee_id,))
+            row = cur.fetchone()
+            return bool(row and str(row[0]) == str(user_id))
+    except Exception:
+        return False
+
+
 _db_initialized = False
 
 
@@ -136,6 +146,9 @@ def handler(event=None, context=None):
                 query += " AND employee_id = %s"; args.append(employee_id)
             if status_f:
                 query += " AND status = %s"; args.append(status_f)
+            if user["role"] == "manager":
+                query += " AND employee_id IN (SELECT id FROM employees WHERE manager_id = %s)"
+                args.append(user["sub"])
             query += " ORDER BY created_at DESC"
             conn = get_db_connection(PG_CONFIG)
             try:
@@ -154,6 +167,8 @@ def handler(event=None, context=None):
                     row = cur.fetchone()
                 if not row:
                     return not_found("Training record not found")
+                if user["role"] == "manager" and not check_manager_access(conn, user["sub"], row[1]):
+                    return forbidden("Not authorized to view this record")
                 return response(200, row_to_dict(row))
             finally:
                 release_connection(conn)
@@ -164,6 +179,9 @@ def handler(event=None, context=None):
             if not course_name or not employee_id:
                 return bad_request("course_name and employee_id are required")
             conn = get_db_connection(PG_CONFIG)
+            if user["role"] == "manager" and not check_manager_access(conn, user["sub"], employee_id):
+                release_connection(conn)
+                return forbidden("Not authorized to create record for this employee")
             try:
                 with conn.cursor() as cur:
                     cur.execute("""
@@ -192,6 +210,16 @@ def handler(event=None, context=None):
                 return bad_request("No fields to update")
             params_list.append(rec_id)
             conn = get_db_connection(PG_CONFIG)
+
+            if user["role"] == "manager":
+                cur = conn.cursor()
+                cur.execute("SELECT employee_id FROM training_records WHERE id = %s", (rec_id,))
+                emp_row = cur.fetchone()
+                cur.close()
+                if not emp_row or not check_manager_access(conn, user["sub"], emp_row[0]):
+                    release_connection(conn)
+                    return forbidden("Not authorized to update this record")
+
             try:
                 with conn.cursor() as cur:
                     cur.execute(f"UPDATE training_records SET {', '.join(updates)}, updated_at = NOW() WHERE id = %s RETURNING id, employee_id, course_name, provider, training_type, completion_date, hours, status, certificate_url, notes, created_at, updated_at", params_list)
@@ -204,9 +232,19 @@ def handler(event=None, context=None):
                 release_connection(conn)
 
         if method == "DELETE" and rec_id:
-            if user["role"] not in ["admin", "manager"]:
+            if user["role"] not in ["admin", "manager", "hr"]:
                 return forbidden("Insufficient permissions")
             conn = get_db_connection(PG_CONFIG)
+
+            if user["role"] == "manager":
+                cur = conn.cursor()
+                cur.execute("SELECT employee_id FROM training_records WHERE id = %s", (rec_id,))
+                emp_row = cur.fetchone()
+                cur.close()
+                if not emp_row or not check_manager_access(conn, user["sub"], emp_row[0]):
+                    release_connection(conn)
+                    return forbidden("Not authorized to delete this record")
+
             try:
                 with conn.cursor() as cur:
                     cur.execute("DELETE FROM training_records WHERE id = %s RETURNING id", (rec_id,))

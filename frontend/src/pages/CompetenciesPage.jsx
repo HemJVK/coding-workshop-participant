@@ -24,7 +24,7 @@ const COLORS = ['#1565C0', '#00ACC1', '#2E7D32', '#E65100', '#7B1FA2', '#C62828'
 
 export default function CompetenciesPage() {
   const user = authService.getUser();
-  const canWrite = ['admin', 'manager'].includes(user?.role);
+  const canWrite = ['admin', 'manager', 'hr'].includes(user?.role);
 
   const [competencies, setCompetencies] = useState([]);
   const [employees, setEmployees] = useState([]);

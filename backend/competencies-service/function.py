@@ -101,6 +101,16 @@ def not_found(msg): return response(404, {"error": msg})
 def server_error(msg): return response(500, {"error": msg})
 
 
+def check_manager_access(conn, user_id, target_employee_id):
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT manager_id FROM employees WHERE id = %s", (target_employee_id,))
+            row = cur.fetchone()
+            return bool(row and str(row[0]) == str(user_id))
+    except Exception:
+        return False
+
+
 _db_initialized = False
 
 
@@ -139,6 +149,9 @@ def handler(event=None, context=None):
                 return bad_request("Employee ID required")
             if method == "GET":
                 conn = get_db_connection(PG_CONFIG)
+                if user["role"] == "manager" and not check_manager_access(conn, user["sub"], emp_id):
+                    release_connection(conn)
+                    return forbidden("Not authorized to view assessments for this employee")
                 try:
                     with conn.cursor() as cur:
                         cur.execute("""
@@ -161,6 +174,9 @@ def handler(event=None, context=None):
                 if not comp_id or current is None:
                     return bad_request("competency_id and current_level are required")
                 conn = get_db_connection(PG_CONFIG)
+                if user["role"] == "manager" and not check_manager_access(conn, user["sub"], emp_id):
+                    release_connection(conn)
+                    return forbidden("Not authorized to assess this employee")
                 try:
                     with conn.cursor() as cur:
                         cur.execute("""
@@ -207,8 +223,27 @@ def handler(event=None, context=None):
             finally:
                 release_connection(conn)
 
+        if method == "PUT" and comp_id:
+            if user["role"] not in ["admin", "manager", "hr"]:
+                return forbidden("Insufficient permissions")
+            name = (body.get("name") or "").strip()
+            if not name:
+                return bad_request("Name is required")
+            conn = get_db_connection(PG_CONFIG)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE competencies SET name=%s, description=%s, category=%s WHERE id=%s RETURNING id, name, description, category, created_at",
+                                (name, body.get("description"), body.get("category"), comp_id))
+                    row = cur.fetchone()
+                    conn.commit()
+                if not row:
+                    return not_found("Competency not found")
+                return response(200, dict(zip(["id", "name", "description", "category", "created_at"], row)))
+            finally:
+                release_connection(conn)
+
         if method == "POST":
-            if user["role"] not in ["admin", "manager"]:
+            if user["role"] not in ["admin", "manager", "hr"]:
                 return forbidden("Insufficient permissions")
             name = (body.get("name") or "").strip()
             if not name:

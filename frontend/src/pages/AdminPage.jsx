@@ -15,8 +15,8 @@ import SnackbarAlert from '../components/SnackbarAlert';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { authService } from '../services/authService';
 
-const ROLES = ['admin', 'manager', 'contributor', 'viewer'];
-const ROLE_COLORS = { admin: 'error', manager: 'warning', contributor: 'info', viewer: 'success' };
+const ROLES = ['admin', 'manager', 'hr', 'employee'];
+const ROLE_COLORS = { admin: 'error', manager: 'warning', hr: 'secondary', employee: 'info' };
 const DEPARTMENTS = ['Engineering', 'Product', 'HR', 'Sales', 'Marketing', 'Finance', 'Operations'];
 const EMPTY_FORM = { name: '', email: '', password: '', role: 'viewer', department: '' };
 

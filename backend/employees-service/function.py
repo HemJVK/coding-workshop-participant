@@ -92,6 +92,13 @@ def row_to_dict(row):
     return dict(zip(keys, row))
 
 
+def check_manager_access(conn, user_id, target_employee_id):
+    with conn.cursor() as cur:
+        cur.execute("SELECT manager_id FROM employees WHERE id = %s", (target_employee_id,))
+        row = cur.fetchone()
+        return bool(row and str(row[0]) == str(user_id))
+
+
 def handle_list(event):
     user = get_current_user(event)
     if not user:
@@ -110,6 +117,8 @@ def handle_list(event):
         query += " AND status = %s"; args.append(status)
     if search:
         query += " AND (name ILIKE %s OR email ILIKE %s OR job_title ILIKE %s)"; args += [f"%{search}%"] * 3
+    if user["role"] == "manager":
+        query += " AND manager_id = %s"; args.append(user["sub"])
     query += " ORDER BY name"
 
     conn = get_db_connection(PG_CONFIG)
@@ -128,6 +137,8 @@ def handle_get_one(event, emp_id):
         return unauthorized("Authentication required")
     conn = get_db_connection(PG_CONFIG)
     try:
+        if user["role"] == "manager" and not check_manager_access(conn, user["sub"], emp_id):
+            return forbidden("Not authorized to view this employee")
         with conn.cursor() as cur:
             cur.execute("SELECT id, name, email, department, job_title, hire_date, manager_id, status, phone, location, created_at, updated_at FROM employees WHERE id = %s", (emp_id,))
             row = cur.fetchone()
@@ -139,13 +150,16 @@ def handle_get_one(event, emp_id):
 
 
 def handle_create(event, body):
-    user, err = require_roles(event, ["admin", "manager"])
+    user, err = require_roles(event, ["admin", "manager", "hr"])
     if err:
         return err
     name = (body.get("name") or "").strip()
     email = (body.get("email") or "").strip().lower()
     if not name or not email:
         return bad_request("Name and email are required")
+
+    if user["role"] == "manager":
+        body["manager_id"] = user["sub"]
 
     conn = get_db_connection(PG_CONFIG)
     try:
@@ -168,9 +182,19 @@ def handle_create(event, body):
 
 
 def handle_update(event, emp_id, body):
-    user, err = require_roles(event, ["admin", "manager"])
+    user, err = require_roles(event, ["admin", "manager", "hr"])
     if err:
         return err
+
+    conn = get_db_connection(PG_CONFIG)
+    if user["role"] == "manager":
+        if not check_manager_access(conn, user["sub"], emp_id):
+            release_connection(conn)
+            return forbidden("Not authorized to update this employee")
+        if "manager_id" in body and str(body["manager_id"]) != str(user["sub"]):
+            release_connection(conn)
+            return forbidden("Managers cannot reassign employees to other managers")
+
     fields = ["name", "email", "department", "job_title", "hire_date", "manager_id", "status", "phone", "location"]
     updates = []
     params = []
@@ -179,9 +203,10 @@ def handle_update(event, emp_id, body):
             updates.append(f"{f} = %s")
             params.append(body[f] if body[f] != "" else None)
     if not updates:
+        release_connection(conn)
         return bad_request("No fields to update")
     params.append(emp_id)
-    conn = get_db_connection(PG_CONFIG)
+
     try:
         with conn.cursor() as cur:
             cur.execute(f"UPDATE employees SET {', '.join(updates)}, updated_at = NOW() WHERE id = %s RETURNING id, name, email, department, job_title, hire_date, manager_id, status, phone, location, created_at, updated_at", params)

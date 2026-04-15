@@ -32,7 +32,7 @@ IS_LOCAL = os.getenv("IS_LOCAL", "true") == "true"
 if not IS_LOCAL:
     PG_CONFIG += " sslmode=require"
 
-VALID_ROLES = ["admin", "manager", "contributor", "viewer"]
+VALID_ROLES = ["admin", "manager", "hr", "employee"]
 
 # ─── DDL ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ def init_db():
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
-                role VARCHAR(50) NOT NULL DEFAULT 'viewer',
+                role VARCHAR(50) NOT NULL DEFAULT 'employee',
                 department VARCHAR(255),
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -150,7 +150,7 @@ def handle_register(body):
     name = (body.get("name") or "").strip()
     email = (body.get("email") or "").strip().lower()
     password = (body.get("password") or "").strip()
-    role = (body.get("role") or "viewer").strip()
+    role = (body.get("role") or "employee").strip()
 
     if not name or not email or not password:
         return bad_request("Name, email, and password are required")
@@ -159,7 +159,7 @@ def handle_register(body):
     if len(password) < 8:
         return bad_request("Password must be at least 8 characters")
     if role not in VALID_ROLES:
-        role = "viewer"
+        role = "employee"
 
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     conn = get_db_connection(PG_CONFIG)

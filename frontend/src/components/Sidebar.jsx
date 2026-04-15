@@ -27,7 +27,7 @@ const navItems = [
 ];
 
 const ROLE_COLORS = {
-  admin: '#C62828', manager: '#E65100', contributor: '#1565C0', viewer: '#2E7D32',
+  admin: '#C62828', manager: '#E65100', hr: '#9C27B0', employee: '#1565C0',
 };
 
 export default function Sidebar({ open, variant = 'permanent', onClose }) {

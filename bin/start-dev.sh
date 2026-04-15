@@ -85,18 +85,28 @@ if [ "$PG_OK" = false ]; then
     else
         PG_CONF=$(find /etc/postgresql -name "postgresql.conf" 2>/dev/null | head -1)
         PG_SERVICE=$(systemctl list-units --type=service --all 2>/dev/null | awk '/postgresql/ {print $1}' | head -1)
+        
         if [ -z "$PG_SERVICE" ]; then
-            echo -e "  ✗ No PostgreSQL systemctl service found. Install: sudo apt install postgresql"
-            exit 1
+            echo -e "  ⚠ No PostgreSQL systemctl service found. Attempting Docker fallback..."
+            if ! docker ps | grep -q postgres-dev; then
+                docker run --name postgres-dev -e POSTGRES_HOST_AUTH_METHOD=trust -p 5432:5432 -d postgres:16 || { echo -e "  ✗ Docker fallback failed"; exit 1; }
+            fi
+        else
+            PG_HBA=$(find /etc/postgresql -name "pg_hba.conf" 2>/dev/null | head -1)
+            [ -n "$PG_CONF" ] && sudo -n sed -i "s/#\?listen_addresses\s*=\s*'[^']*'/listen_addresses = '*'/" "$PG_CONF" 2>/dev/null || true
+            if [ -n "$PG_HBA" ] && ! sudo -n grep -q "0.0.0.0/0" "$PG_HBA" 2>/dev/null; then
+                echo "host all all 0.0.0.0/0 trust" | sudo -n tee -a "$PG_HBA" > /dev/null 2>/dev/null || true
+            fi
+            
+            # Non-interactive sudo restart. If it fails, fallback to Docker
+            if ! sudo -n systemctl restart "$PG_SERVICE" 2>/dev/null; then
+                echo -e "  ⚠ Sudo requires password or failed. Attempting Docker fallback..."
+                if ! docker ps | grep -q postgres-dev; then
+                    docker rm -f postgres-dev 2>/dev/null || true
+                    docker run --name postgres-dev -e POSTGRES_HOST_AUTH_METHOD=trust -p 5432:5432 -d postgres:16 || { echo -e "  ✗ Docker fallback failed"; exit 1; }
+                fi
+            fi
         fi
-
-        PG_HBA=$(find /etc/postgresql -name "pg_hba.conf" 2>/dev/null | head -1)
-        [ -n "$PG_CONF" ] && sudo sed -i "s/#\?listen_addresses\s*=\s*'[^']*'/listen_addresses = '*'/" "$PG_CONF"
-        # Allow all hosts to connect (local dev only)
-        if [ -n "$PG_HBA" ] && ! sudo grep -q "0.0.0.0/0" "$PG_HBA"; then
-            echo "host all all 0.0.0.0/0 trust" | sudo tee -a "$PG_HBA" > /dev/null
-        fi
-        sudo systemctl restart "$PG_SERVICE" || { echo -e "  ✗ Failed to restart PostgreSQL"; exit 1; }
     fi
 
     # Wait for PostgreSQL to be ready and bound

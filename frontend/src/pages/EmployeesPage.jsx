@@ -24,7 +24,7 @@ const STATUS_COLORS = { active: 'success', inactive: 'default', on_leave: 'warni
 export default function EmployeesPage() {
   const navigate = useNavigate();
   const user = authService.getUser();
-  const canWrite = ['admin', 'manager'].includes(user?.role);
+  const canWrite = ['admin', 'manager', 'hr'].includes(user?.role);
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);

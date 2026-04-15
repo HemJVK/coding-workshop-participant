@@ -89,6 +89,16 @@ def row_to_dict(row):
     return dict(zip(keys, row))
 
 
+def check_manager_access(conn, user_id, target_employee_id):
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT manager_id FROM employees WHERE id = %s", (target_employee_id,))
+            row = cur.fetchone()
+            return bool(row and str(row[0]) == str(user_id))
+    except Exception:
+        return False
+
+
 _db_initialized = False
 
 
@@ -139,6 +149,9 @@ def handler(event=None, context=None):
                 query += " AND employee_id = %s"; args.append(employee_id)
             if status_f:
                 query += " AND status = %s"; args.append(status_f)
+            if user["role"] == "manager":
+                query += " AND employee_id IN (SELECT id FROM employees WHERE manager_id = %s)"
+                args.append(user["sub"])
             query += " ORDER BY priority DESC, due_date ASC"
             conn = get_db_connection(PG_CONFIG)
             try:
@@ -157,6 +170,8 @@ def handler(event=None, context=None):
                     row = cur.fetchone()
                 if not row:
                     return not_found("Goal not found")
+                if user["role"] == "manager" and not check_manager_access(conn, user["sub"], row[1]):
+                    return forbidden("Not authorized to view this goal")
                 return response(200, row_to_dict(row))
             finally:
                 release_connection(conn)
@@ -167,6 +182,9 @@ def handler(event=None, context=None):
             if not title or not employee_id:
                 return bad_request("title and employee_id are required")
             conn = get_db_connection(PG_CONFIG)
+            if user["role"] == "manager" and not check_manager_access(conn, user["sub"], employee_id):
+                release_connection(conn)
+                return forbidden("Not authorized to create goal for this employee")
             try:
                 with conn.cursor() as cur:
                     cur.execute("""
@@ -194,6 +212,16 @@ def handler(event=None, context=None):
                 return bad_request("Invalid progress value")
             status = "completed" if progress == 100 else ("in_progress" if progress > 0 else "not_started")
             conn = get_db_connection(PG_CONFIG)
+
+            if user["role"] == "manager":
+                cur = conn.cursor()
+                cur.execute("SELECT employee_id FROM goals WHERE id = %s", (goal_id,))
+                emp_row = cur.fetchone()
+                cur.close()
+                if not emp_row or not check_manager_access(conn, user["sub"], emp_row[0]):
+                    release_connection(conn)
+                    return forbidden("Not authorized to update this goal")
+
             try:
                 with conn.cursor() as cur:
                     cur.execute("UPDATE goals SET progress = %s, status = %s, updated_at = NOW() WHERE id = %s RETURNING id, employee_id, title, description, status, due_date, progress, priority, created_at, updated_at", (progress, status, goal_id))
@@ -217,6 +245,16 @@ def handler(event=None, context=None):
                 return bad_request("No fields to update")
             params_list.append(goal_id)
             conn = get_db_connection(PG_CONFIG)
+
+            if user["role"] == "manager":
+                cur = conn.cursor()
+                cur.execute("SELECT employee_id FROM goals WHERE id = %s", (goal_id,))
+                emp_row = cur.fetchone()
+                cur.close()
+                if not emp_row or not check_manager_access(conn, user["sub"], emp_row[0]):
+                    release_connection(conn)
+                    return forbidden("Not authorized to update this goal")
+
             try:
                 with conn.cursor() as cur:
                     cur.execute(f"UPDATE goals SET {', '.join(updates)}, updated_at = NOW() WHERE id = %s RETURNING id, employee_id, title, description, status, due_date, progress, priority, created_at, updated_at", params_list)
@@ -229,9 +267,19 @@ def handler(event=None, context=None):
                 release_connection(conn)
 
         if method == "DELETE" and goal_id:
-            if user["role"] not in ["admin", "manager"]:
+            if user["role"] not in ["admin", "manager", "hr"]:
                 return forbidden("Insufficient permissions")
             conn = get_db_connection(PG_CONFIG)
+
+            if user["role"] == "manager":
+                cur = conn.cursor()
+                cur.execute("SELECT employee_id FROM goals WHERE id = %s", (goal_id,))
+                emp_row = cur.fetchone()
+                cur.close()
+                if not emp_row or not check_manager_access(conn, user["sub"], emp_row[0]):
+                    release_connection(conn)
+                    return forbidden("Not authorized to delete this goal")
+
             try:
                 with conn.cursor() as cur:
                     cur.execute("DELETE FROM goals WHERE id = %s RETURNING id", (goal_id,))

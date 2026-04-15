@@ -27,7 +27,7 @@ const EMPTY = { employee_id: '', course_name: '', provider: '', training_type: '
 
 export default function TrainingPage() {
   const user = authService.getUser();
-  const canWrite = ['admin', 'manager', 'contributor'].includes(user?.role);
+  const canWrite = ['admin', 'manager', 'hr'].includes(user?.role);
 
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);

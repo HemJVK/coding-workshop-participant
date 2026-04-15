@@ -24,7 +24,7 @@ const EMPTY_FORM = { employee_id: '', period: 'Annual', year: new Date().getFull
 
 export default function ReviewsPage() {
   const user = authService.getUser();
-  const canWrite = ['admin', 'manager', 'contributor'].includes(user?.role);
+  const canWrite = ['admin', 'manager', 'hr'].includes(user?.role);
 
   const [reviews, setReviews] = useState([]);
   const [employees, setEmployees] = useState([]);

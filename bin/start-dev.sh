@@ -256,7 +256,7 @@ echo -e "  ✓ Docker is running"
 
 # Check if LocalStack is running
 LOCALSTACK_OK=false
-LOCALSTACK_IMAGE="${LOCALSTACK_IMAGE:-localstack/localstack}"
+LOCALSTACK_IMAGE="${LOCALSTACK_IMAGE:-localstack/localstack:2.3.2}"
 if curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
     # Verify the correct image is running
     RUNNING_IMAGE=$(docker inspect localstack-main --format '{{.Config.Image}}' 2>/dev/null || echo "")
@@ -282,7 +282,7 @@ if [ "$LOCALSTACK_OK" = false ]; then
 
     echo -e "  ⚠ LocalStack not running, starting it..."
     export LOCALSTACK_ACKNOWLEDGE_ACCOUNT_REQUIREMENT=1
-    IMAGE_NAME="localstack/localstack" localstack start -d
+    IMAGE_NAME="localstack/localstack:2.3.2" localstack start -d
 
     # Wait for LocalStack to be ready (up to 30 seconds)
     for i in {1..30}; do
@@ -378,10 +378,20 @@ unset AWS_SESSION_TOKEN
 BUCKET_NAME="coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}"
 if ! aws s3 ls 2>/dev/null | grep -q "$BUCKET_NAME"; then
     echo -e "  Creating Terraform state bucket: $BUCKET_NAME"
-    aws s3 mb "s3://$BUCKET_NAME" > /dev/null 2>&1 || {
+    
+    # Retry up to 10 times to let S3 boot inside localstack
+    S3_READY=false
+    for j in {1..10}; do
+        if aws s3 mb "s3://$BUCKET_NAME" > /dev/null 2>&1; then
+            S3_READY=true
+            break
+        fi
+        sleep 2
+    done
+    if [ "$S3_READY" = false ]; then
         echo -e "  ✗ Failed to create Terraform state bucket"
         exit 1
-    }
+    fi
 fi
 
 # Ensure terraform is initialized against the correct LocalStack backend
@@ -429,7 +439,7 @@ if [ "$BACKEND_OK" = false ]; then
         docker stop localstack-main 2>/dev/null || true
         sleep 5
         export LOCALSTACK_ACKNOWLEDGE_ACCOUNT_REQUIREMENT=1
-        IMAGE_NAME="localstack/localstack" localstack start -d
+        IMAGE_NAME="localstack/localstack:2.3.2" localstack start -d
 
         # Wait for LocalStack to be ready
         for i in {1..30}; do

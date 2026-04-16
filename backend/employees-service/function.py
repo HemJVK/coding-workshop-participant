@@ -40,6 +40,7 @@ def init_db():
                 status VARCHAR(50) NOT NULL DEFAULT 'active',
                 phone VARCHAR(50),
                 location VARCHAR(255),
+                team VARCHAR(255),
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
@@ -48,19 +49,19 @@ def init_db():
         cur.execute("SELECT COUNT(*) FROM employees;")
         if cur.fetchone()[0] == 0:
             sample = [
-                ("Alice Johnson", "alice.johnson@acme.com", "Engineering", "Senior Engineer", "2020-03-15", None, "active", "+1-555-0101", "New York"),
-                ("Bob Smith", "bob.smith@acme.com", "Engineering", "Staff Engineer", "2018-07-01", None, "active", "+1-555-0102", "San Francisco"),
-                ("Carol White", "carol.white@acme.com", "Product", "Product Manager", "2019-11-20", None, "active", "+1-555-0103", "Austin"),
-                ("David Brown", "david.brown@acme.com", "HR", "HR Manager", "2017-05-10", None, "active", "+1-555-0104", "Chicago"),
-                ("Eve Davis", "eve.davis@acme.com", "Engineering", "Junior Engineer", "2022-01-15", None, "active", "+1-555-0105", "New York"),
-                ("Frank Miller", "frank.miller@acme.com", "Sales", "Sales Director", "2016-09-01", None, "active", "+1-555-0106", "Boston"),
-                ("Grace Lee", "grace.lee@acme.com", "Marketing", "Marketing Manager", "2021-06-01", None, "active", "+1-555-0107", "Seattle"),
-                ("Henry Wilson", "henry.wilson@acme.com", "Finance", "Finance Analyst", "2020-08-15", None, "active", "+1-555-0108", "New York"),
+                ("Alice Johnson", "alice.johnson@acme.com", "Engineering", "Senior Engineer", "2020-03-15", None, "active", "+1-555-0101", "New York", None),
+                ("Bob Smith", "bob.smith@acme.com", "Engineering", "Staff Engineer", "2018-07-01", None, "active", "+1-555-0102", "San Francisco", None),
+                ("Carol White", "carol.white@acme.com", "Product", "Product Manager", "2019-11-20", None, "active", "+1-555-0103", "Austin", None),
+                ("David Brown", "david.brown@acme.com", "HR", "HR Manager", "2017-05-10", None, "active", "+1-555-0104", "Chicago", None),
+                ("Eve Davis", "eve.davis@acme.com", "Engineering", "Junior Engineer", "2022-01-15", None, "active", "+1-555-0105", "New York", None),
+                ("Frank Miller", "frank.miller@acme.com", "Sales", "Sales Director", "2016-09-01", None, "active", "+1-555-0106", "Boston", None),
+                ("Grace Lee", "grace.lee@acme.com", "Marketing", "Marketing Manager", "2021-06-01", None, "active", "+1-555-0107", "Seattle", None),
+                ("Henry Wilson", "henry.wilson@acme.com", "Finance", "Finance Analyst", "2020-08-15", None, "active", "+1-555-0108", "New York", None),
             ]
             for s in sample:
                 cur.execute("""
-                    INSERT INTO employees (name, email, department, job_title, hire_date, manager_id, status, phone, location)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO employees (name, email, department, job_title, hire_date, manager_id, status, phone, location, team)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, s)
         conn.commit()
     release_connection(conn)
@@ -88,7 +89,7 @@ def server_error(msg): return response(500, {"error": msg})
 
 def row_to_dict(row):
     keys = ["id", "name", "email", "department", "job_title", "hire_date",
-            "manager_id", "status", "phone", "location", "created_at", "updated_at"]
+            "manager_id", "status", "phone", "location", "team", "created_at", "updated_at"]
     return dict(zip(keys, row))
 
 
@@ -109,7 +110,7 @@ def handle_list(event):
     status = params.get("status")
     search = params.get("search")
 
-    query = "SELECT id, name, email, department, job_title, hire_date, manager_id, status, phone, location, created_at, updated_at FROM employees WHERE 1=1"
+    query = "SELECT id, name, email, department, job_title, hire_date, manager_id, status, phone, location, team, created_at, updated_at FROM employees WHERE 1=1"
     args = []
     if department:
         query += " AND department = %s"; args.append(department)
@@ -119,6 +120,14 @@ def handle_list(event):
         query += " AND (name ILIKE %s OR email ILIKE %s OR job_title ILIKE %s)"; args += [f"%{search}%"] * 3
     if user["role"] == "manager":
         query += " AND manager_id = %s"; args.append(user["sub"])
+    elif user["role"] == "hr":
+        # HR sees managers (employees who are managers of others) and their teams.
+        # We can say HR sees all employees who have a manager (teams) OR who are managers.
+        # Actually the prompt says "HR can see the managers and their teams".
+        # Since everyone except HR/Admin is a manager or in a team, HR basically sees all except maybe other HR/Admin.
+        # We can implement this simply by showing managers and team members.
+        query += " AND (id IN (SELECT manager_id FROM employees WHERE manager_id IS NOT NULL) OR manager_id IS NOT NULL)"
+
     query += " ORDER BY name"
 
     conn = get_db_connection(PG_CONFIG)
@@ -140,7 +149,7 @@ def handle_get_one(event, emp_id):
         if user["role"] == "manager" and not check_manager_access(conn, user["sub"], emp_id):
             return forbidden("Not authorized to view this employee")
         with conn.cursor() as cur:
-            cur.execute("SELECT id, name, email, department, job_title, hire_date, manager_id, status, phone, location, created_at, updated_at FROM employees WHERE id = %s", (emp_id,))
+            cur.execute("SELECT id, name, email, department, job_title, hire_date, manager_id, status, phone, location, team, created_at, updated_at FROM employees WHERE id = %s", (emp_id,))
             row = cur.fetchone()
         if not row:
             return not_found("Employee not found")
@@ -168,12 +177,12 @@ def handle_create(event, body):
             if cur.fetchone():
                 return bad_request("Email already exists")
             cur.execute("""
-                INSERT INTO employees (name, email, department, job_title, hire_date, manager_id, status, phone, location)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, name, email, department, job_title, hire_date, manager_id, status, phone, location, created_at, updated_at
+                INSERT INTO employees (name, email, department, job_title, hire_date, manager_id, status, phone, location, team)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, name, email, department, job_title, hire_date, manager_id, status, phone, location, team, created_at, updated_at
             """, (name, email, body.get("department"), body.get("job_title"),
                   body.get("hire_date") or None, body.get("manager_id") or None,
-                  body.get("status", "active"), body.get("phone"), body.get("location")))
+                  body.get("status", "active"), body.get("phone"), body.get("location"), body.get("team")))
             row = cur.fetchone()
             conn.commit()
         return response(201, row_to_dict(row))
@@ -195,7 +204,7 @@ def handle_update(event, emp_id, body):
             release_connection(conn)
             return forbidden("Managers cannot reassign employees to other managers")
 
-    fields = ["name", "email", "department", "job_title", "hire_date", "manager_id", "status", "phone", "location"]
+    fields = ["name", "email", "department", "job_title", "hire_date", "manager_id", "status", "phone", "location", "team"]
     updates = []
     params = []
     for f in fields:
@@ -209,7 +218,7 @@ def handle_update(event, emp_id, body):
 
     try:
         with conn.cursor() as cur:
-            cur.execute(f"UPDATE employees SET {', '.join(updates)}, updated_at = NOW() WHERE id = %s RETURNING id, name, email, department, job_title, hire_date, manager_id, status, phone, location, created_at, updated_at", params)
+            cur.execute(f"UPDATE employees SET {', '.join(updates)}, updated_at = NOW() WHERE id = %s RETURNING id, name, email, department, job_title, hire_date, manager_id, status, phone, location, team, created_at, updated_at", params)
             row = cur.fetchone()
             conn.commit()
         if not row:

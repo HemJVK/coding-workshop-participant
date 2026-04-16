@@ -36,7 +36,7 @@ export default function EmployeesPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editEmp, setEditEmp] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', department: '', job_title: '', hire_date: '', phone: '', location: '', status: 'active' });
+  const [form, setForm] = useState({ name: '', email: '', department: '', job_title: '', hire_date: '', phone: '', location: '', team: '', status: 'active' });
   const [formErr, setFormErr] = useState({});
 
   const load = async () => {
@@ -55,14 +55,16 @@ export default function EmployeesPage() {
 
   useEffect(() => { load(); }, [deptFilter, statusFilter]);
 
-  const handleSearch = (e) => {
-    if (e.key === 'Enter') load();
-    setSearch(e.target.value);
+  const handleSearch = (evt) => {
+    setSearch(evt.target.value);
+  };
+  const handleKeyDown = (evt) => {
+    if (evt.key === 'Enter') load();
   };
 
   const openForm = (emp = null) => {
     setEditEmp(emp);
-    setForm(emp ? { name: emp.name, email: emp.email, department: emp.department || '', job_title: emp.job_title || '', hire_date: emp.hire_date?.split('T')[0] || '', phone: emp.phone || '', location: emp.location || '', status: emp.status } : { name: '', email: '', department: '', job_title: '', hire_date: '', phone: '', location: '', status: 'active' });
+    setForm(emp ? { name: emp.name, email: emp.email, department: emp.department || '', job_title: emp.job_title || '', hire_date: emp.hire_date?.split('T')[0] || '', phone: emp.phone || '', location: emp.location || '', team: emp.team || '', status: emp.status } : { name: '', email: '', department: '', job_title: '', hire_date: '', phone: '', location: '', team: '', status: 'active' });
     setFormErr({});
     setFormOpen(true);
   };
@@ -122,7 +124,7 @@ export default function EmployeesPage() {
             <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
               <TextField
                 placeholder="Search name, email, title…" size="small" value={search}
-                onChange={handleSearch} onKeyDown={(e) => e.key === 'Enter' && load()}
+                onChange={handleSearch} onKeyDown={handleKeyDown}
                 sx={{ minWidth: 260 }}
                 InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
               />
@@ -154,6 +156,7 @@ export default function EmployeesPage() {
                 <TableRow>
                   <TableCell>Name</TableCell>
                   <TableCell>Department</TableCell>
+                  <TableCell>Team</TableCell>
                   <TableCell>Title</TableCell>
                   <TableCell>Location</TableCell>
                   <TableCell>Status</TableCell>
@@ -176,6 +179,7 @@ export default function EmployeesPage() {
                       </Box>
                     </TableCell>
                     <TableCell>{emp.department || '—'}</TableCell>
+                    <TableCell>{emp.team || '—'}</TableCell>
                     <TableCell>{emp.job_title || '—'}</TableCell>
                     <TableCell>{emp.location || '—'}</TableCell>
                     <TableCell>
@@ -223,6 +227,7 @@ export default function EmployeesPage() {
               { name: 'job_title', label: 'Job Title' },
               { name: 'phone', label: 'Phone' },
               { name: 'location', label: 'Location' },
+              { name: 'team', label: 'Team' },
               { name: 'hire_date', label: 'Hire Date', type: 'date', InputLabelProps: { shrink: true } },
             ].map(({ name, label, required, type, InputLabelProps }) => (
               <Grid item xs={12} sm={6} key={name}>

@@ -97,6 +97,7 @@ export default function EmployeeDetailPage() {
                     { icon: <PhoneIcon fontSize="small" />, val: emp.phone || '—' },
                     { icon: <BusinessIcon fontSize="small" />, val: emp.department || '—' },
                     { icon: <LocationOnIcon fontSize="small" />, val: emp.location || '—' },
+                    { icon: <BusinessIcon fontSize="small" />, val: emp.team || '—' },
                     { icon: <WorkIcon fontSize="small" />, val: emp.hire_date ? `Hired ${new Date(emp.hire_date).toLocaleDateString()}` : '—' },
                   ].map(({ icon, val }, i) => (
                     <Box key={i} display="flex" alignItems="center" gap={0.5} color="text.secondary">

@@ -23,6 +23,11 @@ def seed_data():
         with conn.cursor() as cur:
             print("🧹 Cleaning existing data...")
             cur.execute("TRUNCATE TABLE users, employees, performance_reviews, goals, training_records CASCADE;")
+
+            # ADD TEAMS COLUMN IF NOT EXISTS
+            cur.execute("""
+                ALTER TABLE employees ADD COLUMN IF NOT EXISTS team VARCHAR(255);
+            """)
             
             # Admin
             admin_pass = bcrypt.hashpw(b"Admin@1234", bcrypt.gensalt()).decode()
@@ -32,26 +37,29 @@ def seed_data():
             """, ("ACME Admin", "admin@acme.com", admin_pass, "admin"))
             print("✅ Created Admin")
 
-            # 1 HR
+            # 2 HRs
             hr_pass = bcrypt.hashpw(b"HR@1234", bcrypt.gensalt()).decode()
-            cur.execute("""
-                INSERT INTO users (name, email, password_hash, role, department)
-                VALUES (%s, %s, %s, %s, %s) RETURNING id
-            """, ("Sarah Jenkins", "hr@acme.com", hr_pass, "hr", "Human Resources"))
-            
-            cur.execute("""
-                INSERT INTO employees (name, email, department, job_title, hire_date, status)
-                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-            """, ("Sarah Jenkins", "hr@acme.com", "Human Resources", "HR Director", "2018-05-10", "active"))
-            print("✅ Created HR Profile")
+            hrs = [
+                ("Sarah Jenkins", "hr1@acme.com"),
+                ("Toby Flenderson", "hr2@acme.com")
+            ]
+            for name, email in hrs:
+                cur.execute("""
+                    INSERT INTO users (name, email, password_hash, role, department)
+                    VALUES (%s, %s, %s, %s, %s) RETURNING id
+                """, (name, email, hr_pass, "hr", "Human Resources"))
+                cur.execute("""
+                    INSERT INTO employees (name, email, department, job_title, hire_date, status)
+                    VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+                """, (name, email, "Human Resources", "HR Rep", "2018-05-10", "active"))
+            print("✅ Created HR Profiles")
 
-            # 5 Managers
+            # 4 Managers
             managers = [
                 ("Michael Scott", "manager1@acme.com", "Engineering", "Engineering Manager"),
                 ("Leslie Knope", "manager2@acme.com", "Product", "Product Lead"),
                 ("Ron Swanson", "manager3@acme.com", "Operations", "Ops Director"),
-                ("Harvey Specter", "manager4@acme.com", "Legal", "Chief Counsel"),
-                ("Sheryl Sandberg", "manager5@acme.com", "Sales", "VP Sales")
+                ("Harvey Specter", "manager4@acme.com", "Legal", "Chief Counsel")
             ]
             
             manager_ids = []
@@ -70,34 +78,23 @@ def seed_data():
                 manager_ids.append(cur.fetchone()[0])
             print("✅ Created Managers")
 
-            # 15 Employees
-            emp_data = [
-                ("Alice Johnson", "alice@acme.com", "Engineering", "Senior Dev"),
-                ("Bob Smith", "bob@acme.com", "Engineering", "Dev Ops"),
-                ("Charlie Brown", "charlie@acme.com", "Product", "UI Designer"),
-                ("Diana Prince", "diana@acme.com", "Product", "QA lead"),
-                ("Edward Norton", "edward@acme.com", "Operations", "Logistics"),
-                ("Fiona Gallagher", "fiona@acme.com", "Operations", "Coordinator"),
-                ("George Costanza", "george@acme.com", "Legal", "Associate"),
-                ("Hannah Baker", "hannah@acme.com", "Legal", "Paralegal"),
-                ("Ian Curtis", "ian@acme.com", "Sales", "Account Exec"),
-                ("Jenny Forrest", "jenny@acme.com", "Sales", "Business Dev"),
-                ("Kevin Malone", "kevin@acme.com", "Engineering", "QA Tester"),
-                ("Laura Croft", "laura@acme.com", "Engineering", "Backend Lead"),
-                ("Mike Ross", "mike@acme.com", "Legal", "Junior Associate"),
-                ("Nina Simone", "nina@acme.com", "Product", "Analyst"),
-                ("Oscar Isaac", "oscar@acme.com", "Sales", "Regional Manager")
-            ]
-            
+            # Employees (under each manager having 2 teams, and 10 employees per team -> 80 total)
+            print("⏳ Creating 80 Employees...")
             employee_ids = []
-            for i, (name, email, dept, title) in enumerate(emp_data):
-                manager_id = manager_ids[i // 3] # Distribute 3 per manager
-                cur.execute("""
-                    INSERT INTO employees (name, email, department, job_title, hire_date, manager_id, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
-                """, (name, email, dept, title, "2021-06-01", manager_id, "active"))
-                employee_ids.append(cur.fetchone()[0])
-            print(f"✅ Created Employees")
+
+            for m_idx, manager_id in enumerate(manager_ids):
+                manager_dept = managers[m_idx][2]
+                for team_num in range(1, 3):
+                    team_name = f"Team {team_num} - {manager_dept}"
+                    for e_num in range(1, 11):
+                        emp_name = f"Emp_{m_idx+1}_{team_num}_{e_num}"
+                        emp_email = f"emp{m_idx+1}_{team_num}_{e_num}@acme.com"
+                        cur.execute("""
+                            INSERT INTO employees (name, email, department, job_title, hire_date, manager_id, status, team)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+                        """, (emp_name, emp_email, manager_dept, "Staff", "2021-06-01", manager_id, "active", team_name))
+                        employee_ids.append(cur.fetchone()[0])
+            print(f"✅ Created {len(employee_ids)} Employees")
 
             # Mock data: Reviews, Goals, Training
             print("📊 Generating mock metrics...")
@@ -109,13 +106,6 @@ def seed_data():
                     INSERT INTO performance_reviews (employee_id, period, year, rating, comments, status)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, (emp, "Q1", 2024, rating, "Solid performance with room to grow.", "submitted"))
-                
-                # Make 1 or 2 low performers
-                if idx in (5, 9):
-                    cur.execute("""
-                        INSERT INTO performance_reviews (employee_id, period, year, rating, comments, status)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (emp, "Q4", 2023, 2.0, "Needs immediate improvement in communication.", "acknowledged"))
 
             # Goals
             for emp in all_emp_ids:

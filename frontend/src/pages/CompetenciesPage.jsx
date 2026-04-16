@@ -27,7 +27,7 @@ export default function CompetenciesPage() {
   const canWrite = ['admin', 'manager', 'hr'].includes(user?.role);
 
   const [competencies, setCompetencies] = useState([]);
-  const [employees, setEmployees] = useState([]);
+  const [, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [snack, setSnack] = useState({ open: false, msg: '', sev: 'success' });
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -56,7 +56,7 @@ export default function CompetenciesPage() {
         return { name: comp.name, avgCurrent: parseFloat(avgCurrent.toFixed(1)), gap: parseFloat(Math.max(0, avgTarget - avgCurrent).toFixed(1)) };
       }).sort((a, b) => b.gap - a.gap);
       setSkillGapData(gaps.slice(0, 8));
-    } catch (e) { setSnack({ open: true, msg: 'Failed to load', sev: 'error' }); }
+    } catch { setSnack({ open: true, msg: 'Failed to load', sev: 'error' }); }
     finally { setLoading(false); }
   };
 

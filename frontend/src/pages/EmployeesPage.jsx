@@ -48,7 +48,7 @@ export default function EmployeesPage() {
       if (search) params.search = search;
       const { data } = await employeeService.list(params);
       setEmployees(data);
-    } catch (e) {
+    } catch {
       setSnack({ open: true, msg: 'Failed to load employees', sev: 'error' });
     } finally { setLoading(false); }
   };
@@ -88,8 +88,8 @@ export default function EmployeesPage() {
       }
       setFormOpen(false);
       load();
-    } catch (e) {
-      setSnack({ open: true, msg: e.response?.data?.error || 'Operation failed', sev: 'error' });
+    } catch {
+      setSnack({ open: true, msg: 'Operation failed', sev: 'error' });
     }
   };
 
@@ -98,7 +98,7 @@ export default function EmployeesPage() {
       await employeeService.delete(deleteId);
       setSnack({ open: true, msg: 'Employee deactivated', sev: 'success' });
       load();
-    } catch (e) {
+    } catch {
       setSnack({ open: true, msg: 'Delete failed', sev: 'error' });
     } finally { setConfirmOpen(false); setDeleteId(null); }
   };

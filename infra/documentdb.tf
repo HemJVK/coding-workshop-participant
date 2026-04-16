@@ -21,10 +21,7 @@ resource "aws_docdb_cluster" "this" {
   vpc_security_group_ids          = data.aws_security_groups.this.ids
   enabled_cloudwatch_logs_exports = ["audit", "profiler"]
 
-  serverless_v2_scaling_configuration {
-    max_capacity = 4.0
-    min_capacity = 0.5
-  }
+
 
   tags = local.app_tags
 }

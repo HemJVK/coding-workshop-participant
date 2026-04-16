@@ -50,11 +50,12 @@ if [ -f "$PARTICIPANT_CONFIG" ]; then
 fi
 
 # Detect environment (local with LocalStack or AWS)
-if curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
+if curl -s http://127.0.0.1:4566/_localstack/health > /dev/null 2>&1; then
     # LocalStack is running — use it
     ENVIRONMENT="local"
-    export AWS_ENDPOINT_URL="http://localhost:4566"
-    export AWS_ENDPOINT_URL_S3="http://s3.localhost.localstack.cloud:4566"
+    export AWS_ENDPOINT_URL="http://127.0.0.1:4566"
+    export AWS_ENDPOINT_URL_S3="http://127.0.0.1:4566"
+    export AWS_SQS_PROTOCOL=query
     export AWS_ACCESS_KEY_ID=test
     export AWS_SECRET_ACCESS_KEY=test
     export AWS_REGION=us-east-1
@@ -67,14 +68,21 @@ else
 fi
 
 # Initialize terraform with the correct backend so outputs come from the right state
-terraform init -reconfigure \
+terraform init -reconfigure -lock=false \
     -backend-config="bucket=$BUCKET_NAME" \
     -backend-config="region=${AWS_REGION:-us-east-1}" \
+    -backend-config="endpoints={s3=\"http://127.0.0.1:4566\",sts=\"http://127.0.0.1:4566\",iam=\"http://127.0.0.1:4566\"}" \
+    -backend-config="skip_credentials_validation=true" \
+    -backend-config="skip_metadata_api_check=true" \
+    -backend-config="skip_region_validation=true" \
+    -backend-config="use_path_style=true" \
     > /dev/null 2>&1
 
 # Retrieve API base URL from Terraform outputs
 ALL_OUTPUTS=$(terraform output -json 2>/dev/null || echo "{}")
-API_BASE_URL=$(echo "$ALL_OUTPUTS" | grep -o '"api_base_url":{[^}]*}' | grep -o '"value":"[^"]*"' | cut -d'"' -f4 || echo "")
+
+# Use Python for robust JSON parsing
+API_BASE_URL=$(echo "$ALL_OUTPUTS" | python3 -c "import sys, json; data = json.load(sys.stdin); print(data.get('api_base_url', {}).get('value', ''))")
 
 if [ -z "$ALL_OUTPUTS" ] || [ "$ALL_OUTPUTS" = "{}" ]; then
     echo "WARNING: Could not get outputs from Terraform"
@@ -82,22 +90,18 @@ if [ -z "$ALL_OUTPUTS" ] || [ "$ALL_OUTPUTS" = "{}" ]; then
     exit 1
 fi
 
-# Fallback using terraform output -raw (suppress stderr warnings)
-if [ -z "$API_BASE_URL" ]; then
-    API_BASE_URL=$(terraform output -raw api_base_url 2>/dev/null || echo "")
-fi
-
 # Handle empty API base URL (valid for local development - uses direct Lambda URLs)
 if [ -z "$API_BASE_URL" ]; then
-    echo "API Base URL: (empty - using direct Lambda Function URLs)"
+    echo "API Base URL: (empty - using direct Lambda Function URLs via proxy)"
     API_BASE_URL="http://localhost:3001"
 else
     echo "API Base URL: $API_BASE_URL"
 fi
 
-# Retrieve API endpoints and Lambda URLs from Terraform outputs
-API_ENDPOINTS=$(terraform output -json api_endpoints 2>/dev/null || echo "{}")
-LAMBDA_URLS=$(terraform output -json lambda_urls 2>/dev/null || echo "{}")
+# Retrieve API endpoints and Lambda URLs from Terraform outputs using Python for precision
+export ALL_OUTPUTS
+API_ENDPOINTS=$(echo "$ALL_OUTPUTS" | python3 -c "import sys, json; data = json.load(sys.stdin); print(json.dumps(data.get('api_endpoints', {}).get('value', {})))")
+LAMBDA_URLS=$(echo "$ALL_OUTPUTS" | python3 -c "import sys, json; data = json.load(sys.stdin); print(json.dumps(data.get('lambda_urls', {}).get('value', {})))")
 
 # Generate .env.local configuration file for React frontend
 cat > "$ENVIRONMENT_CONFIG" << EOF

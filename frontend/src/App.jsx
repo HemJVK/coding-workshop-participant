@@ -10,6 +10,7 @@ import DevelopmentPage from './pages/DevelopmentPage';
 import TrainingPage from './pages/TrainingPage';
 import GoalsPage from './pages/GoalsPage';
 import AdminPage from './pages/AdminPage';
+import ProfilePage from './pages/ProfilePage';
 
 export default function App() {
   return (
@@ -29,6 +30,9 @@ export default function App() {
 
       {/* Admin only */}
       <Route path="/admin" element={<AuthGuard roles={['admin']}><AdminPage /></AuthGuard>} />
+
+      {/* Profile */}
+      <Route path="/profile" element={<AuthGuard><ProfilePage /></AuthGuard>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

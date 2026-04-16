@@ -13,7 +13,7 @@ def get_db_connection(config: str):
     global _PG_CONN
     try:
         if _PG_CONN is None or _PG_CONN.closed:
-            _PG_CONN = connect(config)
+            _PG_CONN = connect(config, autocommit=True)
         return _PG_CONN
     except OperationalError as e:
         _PG_CONN = None

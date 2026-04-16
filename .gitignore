@@ -256,3 +256,21 @@ tfplan
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .github/instructions/snyk_rules.instructions.md
+
+# Lambda Dependency Pollutants (Local Pip Target)
+backend/*/bcrypt/
+backend/*/jwt/
+backend/*/psycopg/
+backend/*/psycopg_binary/
+backend/*/psycopg_binary.libs/
+backend/*/typing_extensions/
+backend/*/*.dist-info/
+backend/*/__pycache__/
+backend/*/requirements.txt
+!backend/auth-service/requirements.txt
+!backend/competencies-service/requirements.txt
+!backend/development-service/requirements.txt
+!backend/employees-service/requirements.txt
+!backend/goals-service/requirements.txt
+!backend/reviews-service/requirements.txt
+!backend/training-service/requirements.txt

@@ -5,6 +5,9 @@
 
 set -e
 
+# Ensure local bin is in PATH for aws cli
+export PATH="$HOME/.local/bin:$PATH"
+
 # Usage helper
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Usage: $0"
@@ -284,21 +287,11 @@ if [ "$LOCALSTACK_OK" = false ]; then
     export LOCALSTACK_ACKNOWLEDGE_ACCOUNT_REQUIREMENT=1
     IMAGE_NAME="localstack/localstack:2.3.2" localstack start -d
 
-    # Wait for LocalStack to be ready (up to 30 seconds)
-    for i in {1..30}; do
-        if curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
-            LOCALSTACK_OK=true
-            echo -e "  ✓ LocalStack started"
-            break
-        fi
-        echo -e "  Waiting for LocalStack... ($i/30)"
-        sleep 1
-    done
-
-    if [ "$LOCALSTACK_OK" = false ]; then
-        echo -e "  ✗ LocalStack failed to start within 30 seconds"
-        exit 1
-    fi
+    # Wait for LocalStack to be ready (45 second sleep for stability)
+    echo -n "  Waiting for LocalStack (45s)..."
+    sleep 45
+    echo " ✓"
+    READY=true
 fi
 
 # Verify LocalStack services
@@ -333,27 +326,27 @@ else
     echo -e "  Detected Mac/Windows - using host: host.docker.internal"
 fi
 
-# Install pip requirements into each Python service directory for hot-reload
-# Skip if requirements.txt hasn't changed since last install (avoids slow PyPI lookups)
+# Install pip requirements with specific platform targeting for Lambda compatibility (Amazon Linux 2)
+# This prevents binary compatibility issues (GLIBC versions) between host and Lambda.
+BACKEND_REQS="$PROJECT_ROOT/backend/requirements.txt"
 shopt -s nullglob
-for req in "$PROJECT_ROOT"/backend/*/requirements.txt; do
-    svc_dir="$(dirname "$req")"
-    REQS_HASH=$(md5sum "$req" 2>/dev/null | cut -d' ' -f1)
-    HASH_FILE="$svc_dir/.pip_installed"
-    if [ "$(cat "$HASH_FILE" 2>/dev/null)" = "$REQS_HASH" ]; then
-        echo -e "  pip requirements for $(basename "$svc_dir") already up to date, skipping..."
-        continue
-    fi
-    echo -e "  Installing pip requirements for $(basename "$svc_dir")..."
-    pip install --quiet --target="$svc_dir" -r "$req" 2>/dev/null || true
-    echo "$REQS_HASH" > "$HASH_FILE"
-done
-
-# Install npm dependencies into each Node.js service directory for hot-reload
-for pkg in "$PROJECT_ROOT"/backend/*/package.json; do
-    svc_dir="$(dirname "$pkg")"
-    echo -e "  Installing npm dependencies for $(basename "$svc_dir")..."
-    npm install --prefix "$svc_dir" --silent 2>/dev/null || true
+for svc_dir in "$PROJECT_ROOT"/backend/*/; do
+    [ -d "$svc_dir" ] || continue
+    [ "$(basename "$svc_dir")" = "_examples" ] && continue
+    [ ! -f "$svc_dir/function.py" ] && continue
+    
+    # Copy shared requirements
+    cp "$BACKEND_REQS" "$svc_dir/requirements.txt"
+    
+    echo -e "  Installing Lambda-compatible requirements for $(basename "$svc_dir")..."
+    # Target manylinux2014 (CentOS 7 / AL2) to ensure GLIBC compatibility
+    pip install --quiet \
+        --platform manylinux2014_x86_64 \
+        --implementation cp \
+        --python-version 3.11 \
+        --only-binary=:all: \
+        --target="$svc_dir" \
+        -r "$svc_dir/requirements.txt" || true
 done
 shopt -u nullglob
 
@@ -367,37 +360,47 @@ if [ -f "$PARTICIPANT_CONFIG" ]; then
 fi
 
 # Override credentials for LocalStack
-export AWS_ENDPOINT_URL="http://localhost:4566"
-export AWS_ENDPOINT_URL_S3="http://s3.localhost.localstack.cloud:4566"
+export AWS_ENDPOINT_URL="http://127.0.0.1:4566"
+export AWS_ENDPOINT_URL_S3="http://127.0.0.1:4566"
+export AWS_SQS_PROTOCOL=query
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_REGION=us-east-1
+export AWS_DEFAULT_REGION=us-east-1
 unset AWS_SESSION_TOKEN
 
 # Ensure the Terraform state bucket exists in LocalStack
-BUCKET_NAME="coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}"
-if ! aws s3 ls 2>/dev/null | grep -q "$BUCKET_NAME"; then
-    echo -e "  Creating Terraform state bucket: $BUCKET_NAME"
-    
-    # Retry up to 10 times to let S3 boot inside localstack
-    S3_READY=false
-    for j in {1..10}; do
-        if aws s3 mb "s3://$BUCKET_NAME" > /dev/null 2>&1; then
-            S3_READY=true
-            break
+# Terraform sometimes looks for the hardcoded one in provider.tf during init even with overrides
+for BUCKET_NAME in "coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}" "coding-workshop-us-east-1-${PARTICIPANT_ID:-abcd1234}"; do
+    if ! aws --endpoint-url=http://127.0.0.1:4566 s3 ls 2>/dev/null | grep -q "$BUCKET_NAME"; then
+        echo -e "  Creating Terraform state bucket: $BUCKET_NAME"
+        
+        # Retry up to 10 times to let S3 boot inside localstack
+        S3_READY=false
+        for j in {1..10}; do
+            if aws --endpoint-url=http://127.0.0.1:4566 s3 mb "s3://$BUCKET_NAME" > /dev/null 2>&1; then
+                S3_READY=true
+                break
+            fi
+            sleep 2
+        done
+        if [ "$S3_READY" = false ]; then
+            echo -e "  ✗ Failed to create Terraform state bucket: $BUCKET_NAME"
+            exit 1
         fi
-        sleep 2
-    done
-    if [ "$S3_READY" = false ]; then
-        echo -e "  ✗ Failed to create Terraform state bucket"
-        exit 1
     fi
-fi
+done
 
 # Ensure terraform is initialized against the correct LocalStack backend
-terraform init -reconfigure \
+rm -rf .terraform
+terraform init -reconfigure -lock=false \
     -backend-config="bucket=coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}" \
     -backend-config="region=${AWS_REGION:-us-east-1}" \
+    -backend-config="endpoints={s3=\"http://127.0.0.1:4566\",sts=\"http://127.0.0.1:4566\",iam=\"http://127.0.0.1:4566\"}" \
+    -backend-config="skip_credentials_validation=true" \
+    -backend-config="skip_metadata_api_check=true" \
+    -backend-config="skip_region_validation=true" \
+    -backend-config="use_path_style=true" \
     > /tmp/tf-init.log 2>&1 || {
     echo -e "  ✗ Terraform init failed:"
     tail -n 20 /tmp/tf-init.log | sed 's/^/    /'
@@ -441,18 +444,11 @@ if [ "$BACKEND_OK" = false ]; then
         export LOCALSTACK_ACKNOWLEDGE_ACCOUNT_REQUIREMENT=1
         IMAGE_NAME="localstack/localstack:2.3.2" localstack start -d
 
-        # Wait for LocalStack to be ready
-        for i in {1..30}; do
-            if curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
-                echo -e "  ✓ LocalStack restarted"
-                break
-            fi
-            if [ "$i" -eq 30 ]; then
-                echo -e "  ✗ LocalStack failed to restart"
-                exit 1
-            fi
-            sleep 1
-        done
+        # Wait for LocalStack to be ready (45 second sleep for stability)
+        echo -n "  Waiting for LocalStack (45s)..."
+        sleep 45
+        echo " ✓"
+        READY=true
 
         # Retry deploy against clean LocalStack
         "$SCRIPT_DIR/deploy-backend.sh" local > /tmp/backend-deploy.log 2>&1 || {

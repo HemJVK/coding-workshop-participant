@@ -13,7 +13,19 @@ api.interceptors.request.use((config) => {
 
 // Handle 401 globally — redirect to login
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Handle LocalStack returning 200 OK for error bodies
+    if (res.data && res.data.error) {
+      if (res.data.error === "Invalid email or password" || res.data.error.includes("Authentication required") || res.data.error.includes("expired")) {
+        localStorage.removeItem('acme_token');
+        localStorage.removeItem('acme_user');
+        window.location.href = '/login';
+        return Promise.reject({ response: { status: 401, data: res.data } });
+      }
+      return Promise.reject({ response: { status: 400, data: res.data } });
+    }
+    return res;
+  },
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('acme_token');

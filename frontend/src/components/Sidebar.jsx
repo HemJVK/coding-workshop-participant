@@ -11,6 +11,7 @@ import StarHalfIcon from '@mui/icons-material/StarHalf';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SchoolIcon from '@mui/icons-material/School';
 import FlagIcon from '@mui/icons-material/Flag';
+import PersonIcon from '@mui/icons-material/Person';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import { authService } from '../services/authService';
 
@@ -24,6 +25,7 @@ const navItems = [
   { label: 'Development', path: '/development', icon: <TrendingUpIcon /> },
   { label: 'Training', path: '/training', icon: <SchoolIcon /> },
   { label: 'Goals', path: '/goals', icon: <FlagIcon /> },
+  { label: 'My Profile', path: '/profile', icon: <PersonIcon /> },
 ];
 
 const ROLE_COLORS = {

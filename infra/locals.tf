@@ -35,7 +35,7 @@ locals {
       handler = "com.example.Handler::handleRequest"
       path    = abspath(format("%s/../backend/%s/target", path.module, name))
       mvn_cmd = [
-        format("cd %s", abspath(format("%s/../backend/%s", path.module, name))),
+        format("cd \"%s\"", abspath(format("%s/../backend/%s", path.module, name))),
         "mvn clean package -DskipTests",
         format("find ./target ! -name '%s*.jar' -delete", name),
       ]
@@ -59,8 +59,7 @@ locals {
       runtime          = "python3.11"
       handler          = "function.handler"
       path             = abspath(format("%s/../backend/%s", path.module, name))
-      patterns         = ["!__pycache__/.*", "!\\..*"]
-      pip_requirements = true
+      pip_requirements = false
     }
   }
   function_names = merge(local.java_names, local.nodejs_names, local.python_names)
@@ -76,7 +75,7 @@ locals {
     APP_ID        = local.app_id
     APP_NAME      = format("%s-%s", var.aws_project, local.app_id)
     APP_ROLE      = format("arn:%s:iam::%s:role/%s-assume-%s", data.aws_partition.this.partition, data.aws_caller_identity.this.account_id, var.aws_project, local.app_id)
-    APP_REGION    = data.aws_region.this.region
+    APP_REGION    = data.aws_region.this.name
     IS_LOCAL      = data.aws_caller_identity.this.id == "000000000000" ? "true" : "false"
     POSTGRES_HOST = data.aws_caller_identity.this.id == "000000000000" ? coalesce(try(trimspace(var.aws_postgres_host), ""), "172.17.0.1") : element(aws_rds_cluster.this.*.endpoint, 0)
     POSTGRES_PORT = data.aws_caller_identity.this.id == "000000000000" ? "5432" : element(aws_rds_cluster.this.*.port, 0)

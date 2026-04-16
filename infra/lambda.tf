@@ -1,7 +1,7 @@
 module "lambda" {
   for_each = local.function_names
   source   = "terraform-aws-modules/lambda/aws"
-  version  = "~> 8.0"
+  version  = "~> 7.0"
 
   function_name   = format("%s-%s-%s", var.aws_project, each.value.name, local.app_id)
   package_type    = "Zip"
@@ -38,7 +38,7 @@ module "lambda" {
   policy_json        = templatefile("${path.module}/policy.tftpl", { app_id = local.app_id, app_name = var.aws_project })
 
   attach_cloudwatch_logs_policy     = true
-  attach_dead_letter_policy         = true
+  attach_dead_letter_policy         = false
   ephemeral_storage_size            = 512
   cloudwatch_logs_retention_in_days = 7
   cloudwatch_logs_skip_destroy      = false
@@ -46,7 +46,7 @@ module "lambda" {
   trigger_on_package_timestamp      = false
   create_lambda_function_url        = true
   authorization_type                = "NONE"
-  dead_letter_target_arn            = aws_sqs_queue.this[each.key].arn
+
 
   cors = {
     allow_credentials = false
@@ -67,14 +67,7 @@ module "lambda" {
   depends_on = [null_resource.java_build]
 }
 
-resource "aws_sqs_queue" "this" {
-  for_each = local.function_names
-  name     = format("%s-%s-dlq-%s", var.aws_project, each.value.name, local.app_id)
 
-  sqs_managed_sse_enabled = true
-
-  tags = local.app_tags
-}
 
 resource "null_resource" "hot_reload" {
   for_each = {for k, v in local.function_names : k => v if data.aws_caller_identity.this.id == "000000000000"}
@@ -92,7 +85,7 @@ resource "null_resource" "hot_reload" {
       aws lambda update-function-code \
         --function-name ${module.lambda[each.key].lambda_function_name} \
         --s3-bucket hot-reload \
-        --s3-key ${each.value.path}
+        --s3-key "${each.value.path}"
     EOT
   }
 

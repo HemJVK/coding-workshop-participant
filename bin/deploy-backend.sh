@@ -61,32 +61,52 @@ if [ "$ENVIRONMENT" = "aws" ]; then
     echo "INFO: Using AWS deployment (terraform)..."
 
     # Setup participant if config is missing
-    $SCRIPT_DIR/setup-participant.sh
+    "$SCRIPT_DIR/setup-participant.sh"
 
     # Load participant-specific configuration if available
     if [ -f "$ENVIRONMENT_CONFIG" ]; then
         echo "INFO: Loading participant environment configuration..."
-        source $ENVIRONMENT_CONFIG
+        source "$ENVIRONMENT_CONFIG"
     else
         echo "WARNING: $ENVIRONMENT_CONFIG is missing"
     fi
 else
     # Local development configuration — override credentials for LocalStack
-    export AWS_ENDPOINT_URL="http://localhost:4566"
-    export AWS_ENDPOINT_URL_S3="http://s3.localhost.localstack.cloud:4566"
+    export AWS_ENDPOINT_URL="http://127.0.0.1:4566"
+    export AWS_ENDPOINT_URL_S3="http://127.0.0.1:4566"
+    export AWS_SQS_PROTOCOL=query
     export AWS_ACCESS_KEY_ID=test
     export AWS_SECRET_ACCESS_KEY=test
     export AWS_REGION=us-east-1
+    export AWS_DEFAULT_REGION=us-east-1
     unset AWS_SESSION_TOKEN
 
-    BUCKET_NAME="coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}"
-    if ! aws s3 ls | grep -q "$BUCKET_NAME"; then
-        aws s3 mb "s3://$BUCKET_NAME"
-    fi
+    # Ensure both possible tfstate bucket names exist for LocalStack
+    for BUCKET_NAME in "coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}" "coding-workshop-us-east-1-${PARTICIPANT_ID:-abcd1234}"; do
+        if ! aws --endpoint-url=http://127.0.0.1:4566 s3 ls | grep -q "$BUCKET_NAME"; then
+            aws --endpoint-url=http://127.0.0.1:4566 s3 mb "s3://$BUCKET_NAME"
+        fi
+    done
+    # Wait for LocalStack to be ready (45 second sleep for stability)
+    echo -n "INFO: Waiting for LocalStack (45s)..."
+    sleep 45
+    echo " ✓"
+    READY=true
 fi
 
 # Initialize Terraform with backend configuration
-if [ -n "$PARTICIPANT_ID" ]; then
+if [ "$ENVIRONMENT" = "local" ]; then
+    echo "INFO: Initializing with LocalStack backend configuration..."
+    rm -rf .terraform
+    terraform init -reconfigure -lock=false \
+        -backend-config="bucket=coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}" \
+        -backend-config="region=${AWS_REGION:-us-east-1}" \
+        -backend-config="endpoints={s3=\"http://127.0.0.1:4566\",sts=\"http://127.0.0.1:4566\",iam=\"http://127.0.0.1:4566\"}" \
+        -backend-config="skip_credentials_validation=true" \
+        -backend-config="skip_metadata_api_check=true" \
+        -backend-config="skip_region_validation=true" \
+        -backend-config="use_path_style=true"
+elif [ -n "$PARTICIPANT_ID" ]; then
     echo "INFO: Using custom backend configuration..."
     terraform init -reconfigure -backend-config="bucket=coding-workshop-tfstate-${PARTICIPANT_ID:-abcd1234}" -backend-config="region=${AWS_REGION:-us-east-1}"
 else
@@ -96,7 +116,7 @@ else
 fi
 
 # Apply Terraform configuration automatically
-terraform apply -auto-approve
+terraform apply -auto-approve -lock=false
 echo "INFO: Infrastructure deployment complete!"
 
 # Display API endpoint

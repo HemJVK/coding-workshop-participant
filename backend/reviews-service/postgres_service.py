@@ -9,6 +9,7 @@ _PG_CONN = None
 
 
 def get_db_connection(config: str):
+    """Return a live connection, creating or reconnecting as needed."""
     global _PG_CONN
     try:
         if _PG_CONN is None or _PG_CONN.closed:
@@ -20,4 +21,5 @@ def get_db_connection(config: str):
 
 
 def release_connection(conn):
+    """No-op for module-level pooling; kept for interface symmetry."""
     pass

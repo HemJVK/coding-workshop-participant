@@ -1,0 +1,130 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Segoe UI;}{\f1 Consolas;}}
+\paperw11907\paperh16840\margl1134\margr1134\margt1134\margb1134
+\fs32\b ACME Performance Platform - Demo Master Briefing\b0\fs22\par
+\par
+\b Prepared For:\b0 Workshop demo and architecture review panel\par
+\b Date:\b0 April 17, 2026\par
+\b Project:\b0 coding-workshop-participant\par
+\b Deliverable Scope:\b0 Complete architecture, edge cases, technical specifications, and demo script\par
+\par
+\fs26\b 1. Executive Summary\b0\fs22\par
+This platform unifies HR operations and workforce analytics under a single API ingress. It is not only CRUD-capable; it provides decision-grade outputs: attrition risks, high-potential identification, skill gap detection, and skills distribution.\par
+\par
+\fs26\b 2. Full Architecture Overview\b0\fs22\par
+\b 2.1 Frontend Layer\b0\par
+- React 19 + Vite + Material UI + Recharts\par
+- Axios API client with JWT interceptor\par
+- AuthGuard route protection with role-aware navigation\par
+- Key routes: /login, /, /employees, /employees/:id, /reviews, /goals, /training, /development, /competencies, /admin, /profile\par
+\par
+\b 2.2 Gateway Layer\b0\par
+- FastAPI gateway in backend/main.py\par
+- Unified route shape: /api/{service_name} and /api/{service_name}/{rest_of_path}\par
+- Dynamic service module loading for bounded service behavior\par
+- Header normalization for Authorization casing compatibility\par
+- CloudFront workshop header gate check (X-Workshop-Token)\par
+\par
+\b 2.3 Domain Service Layer\b0\par
+- auth-service: login, register, profile, admin user management\par
+- employees-service: employee CRUD and manager access scoping\par
+- reviews-service: performance review CRUD and rating validations\par
+- goals-service: goal CRUD plus dedicated progress endpoint\par
+- competencies-service: competency catalog and employee assessments\par
+- training-service: training records lifecycle\par
+- development-service: employee development plans\par
+- analytics-service: strategic multi-domain aggregation endpoints\par
+\par
+\b 2.4 Data Layer\b0\par
+- PostgreSQL as shared persistence backend\par
+- Service-level schema bootstrap using CREATE TABLE IF NOT EXISTS\par
+- Seeded data for demo readiness\par
+- Module-level connection reuse pattern for warm execution paths\par
+\par
+\b 2.5 Infrastructure Layer\b0\par
+- Terraform manages cloud resources\par
+- CloudFront distribution with API route behavior and SPA rewrite function\par
+- Lambda Function URL with AWS_IAM authorization\par
+- S3 hosting for frontend path in cloud\par
+- Aurora PostgreSQL (cloud) and Docker Postgres (local)\par
+- Mangum adapter in lambda_handler.py for Lambda event translation\par
+\par
+\fs26\b 3. Security and RBAC Design\b0\fs22\par
+\b Authentication\b0\par
+- JWT issued by auth-service with HS256 and 8-hour expiration\par
+- Token and user stored in browser local storage\par
+- 401 handling globally forces secure logout and redirect\par
+\par
+\b Authorization\b0\par
+- UI route guard for authentication and admin-only sections\par
+- Backend role enforcement is authoritative\par
+- Manager-scoped access checks enforce employee ownership\par
+\par
+\b Edge Security\b0\par
+- CloudFront sends workshop token header\par
+- Gateway rejects calls with invalid/missing token except health\par
+- Lambda URL invocation protected with IAM permissions\par
+\par
+\fs26\b 4. API and Data Capability Matrix\b0\fs22\par
+\b auth-service\b0 : /login, /register, /me, /users with admin control and self-management constraints\par
+\b employees-service\b0 : List/get/create/update/delete employees; manager filtering by manager_id; delete is soft status inactivation\par
+\b reviews-service\b0 : Review lifecycle with rating bounds and manager authorization checks\par
+\b goals-service\b0 : Goal lifecycle + /id/progress for atomic progress-state transitions\par
+\b competencies-service\b0 : Competency definitions + employee competency upsert\par
+\b training-service\b0 : Training records across providers/types/statuses\par
+\b development-service\b0 : Development plans aligned to employee growth paths\par
+\b analytics-service\b0 : /skill-gaps, /high-potentials, /attrition-risks, /distribution/skills\par
+\par
+\fs26\b 5. Demonstration Script (High-Impact Sequence)\b0\fs22\par
+1) Login with seeded admin credentials and explain auth model.\par
+2) Navigate dashboard and narrate KPI meaning and workforce insights.\par
+3) Open employee detail and show cross-domain data consistency.\par
+4) Highlight role enforcement (admin route and manager scope constraints).\par
+5) Execute one edit flow and one analytics check to prove end-to-end behavior.\par
+6) Close with local-to-cloud architecture continuity.\par
+\par
+\fs26\b 6. Complete Edge Case Coverage\b0\fs22\par
+\b A) Covered well\b0\par
+- Invalid login returns unauthorized\par
+- Unauthorized profile requests are blocked\par
+- Unauthorized employee create (employee role) is denied\par
+- Analytics endpoint transformations are validated in tests\par
+- Goal progress has strict numeric constraints (0..100)\par
+\par
+\b B) Critical risks to call out proactively\b0\par
+1. Gateway path contract mismatch risk:\par
+   Gateway can forward stripped paths (example /123), while multiple services parse IDs only when there are >=2 path segments. This can affect get-by-id/update/delete route correctness.\par
+2. Default secrets in code/config:\par
+   Workshop defaults exist for JWT and DB credentials; production should externalize these secrets.\par
+3. Service startup iteration includes non-service sentinel:\par
+   Health key in service map has null target and can create avoidable startup warnings.\par
+4. Mixed delete semantics:\par
+   Some services soft-delete while others hard-delete; requires explicit data retention policy.\par
+5. Test breadth gap:\par
+   Current tests are strong in selected domains but should expand to all services and gateway edge contracts.\par
+\par
+\fs26\b 7. Technical Specifications\b0\fs22\par
+\b Frontend\b0 : React 19, Vite 7, MUI, Axios, Recharts\par
+\b Backend\b0 : Python FastAPI gateway + Lambda-style service handlers + Mangum adapter\par
+\b Database\b0 : PostgreSQL (local Docker and cloud Aurora)\par
+\b Infra\b0 : Terraform, CloudFront, Lambda Function URL (AWS_IAM), S3, RDS\par
+\b Local Ports\b0 : frontend 3000, backend 8000, db mapped 5434 -> 5432\par
+\par
+\fs26\b 8. Q and A Prep\b0\fs22\par
+\b Q: Why unified gateway + multiple services?\b0\par
+A: Single ingress simplifies client integration and edge security, while service modules preserve domain boundaries and extensibility.\par
+\par
+\b Q: How is security enforced beyond frontend guards?\b0\par
+A: Service handlers validate JWT and roles server-side; frontend guards improve UX but are not trusted boundaries.\par
+\par
+\b Q: Biggest technical risk and mitigation?\b0\par
+A: Path contract mismatch between gateway and service parsers; mitigation is path normalization and route contract regression tests.\par
+\par
+\b Q: What differentiates this from a standard CRUD app?\b0\par
+A: Dedicated analytics layer fuses multiple domain datasets into workforce intelligence outputs that support strategic decisions.\par
+\par
+\fs26\b 9. Final Positioning Statement\b0\fs22\par
+This project demonstrates a practical and deployable people-performance platform with clear architectural boundaries, meaningful security controls, and business-oriented analytics. It is demo-strong today, with a direct hardening roadmap for production maturity.\par
+\par
+\b Companion Artifact:\b0 architecture-diagram.html contains the complete visual architecture and flow map.\par
+}

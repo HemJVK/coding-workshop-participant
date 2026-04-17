@@ -1,0 +1,119 @@
+module "lambda" {
+  for_each = local.function_names
+  source   = "terraform-aws-modules/lambda/aws"
+  version  = "~> 7.0"
+
+  function_name   = format("%s-%s-%s", var.aws_project, each.value.name, local.app_id)
+  package_type    = "Zip"
+  architectures   = [each.value.arch]
+  handler         = each.value.handler
+  runtime         = each.value.runtime
+  memory_size     = 128
+  timeout         = 300
+  tracing_mode    = "PassThrough"
+  build_in_docker = false
+  store_on_s3     = data.aws_caller_identity.this.id != "000000000000"
+  s3_bucket       = data.aws_caller_identity.this.id != "000000000000" ? aws_s3_bucket.this.id : null
+  s3_prefix       = data.aws_caller_identity.this.id != "000000000000" ? format("lambda/%s/%s/", local.app_id, each.value.name) : null
+
+  source_path = [{
+    path             = try(each.value.path, null)
+    patterns         = try(each.value.patterns, null)
+    pip_requirements = try(each.value.pip_requirements, null)
+    npm_requirements = try(each.value.npm_requirements, null)
+  }]
+
+  vpc_security_group_ids = data.aws_security_groups.this.ids
+  vpc_subnet_ids         = local.public_subnet_ids
+  attach_network_policy  = true
+
+  create_package     = true
+  create_role        = true
+  role_name          = format("%s-%s-%s", var.aws_project, each.value.name, local.app_id)
+  role_path          = "/service-role/"
+  attach_policies    = true
+  number_of_policies = length(local.iam_arns)
+  policies           = local.iam_arns
+  attach_policy_json = true
+  policy_json        = templatefile("${path.module}/policy.tftpl", { app_id = local.app_id, app_name = var.aws_project })
+
+  attach_cloudwatch_logs_policy     = true
+  attach_dead_letter_policy         = false
+  ephemeral_storage_size            = 512
+  cloudwatch_logs_retention_in_days = 7
+  cloudwatch_logs_skip_destroy      = false
+  use_existing_cloudwatch_log_group = true
+  trigger_on_package_timestamp      = false
+  create_lambda_function_url        = true
+  authorization_type                = "NONE"
+
+
+  cors = {
+    allow_credentials = false
+    allow_headers     = ["*"]
+    allow_methods     = ["*"]
+    allow_origins     = ["*"]
+    expose_headers    = []
+    max_age           = 0
+  }
+
+  environment_variables = {
+    for key, value in local.env_vars :
+    key => trimspace(value) if try(trimspace(value), "") != ""
+  }
+
+  tags = local.app_tags
+
+  depends_on = [null_resource.java_build]
+}
+
+
+
+resource "null_resource" "hot_reload" {
+  for_each = { for k, v in local.function_names : k => v if data.aws_caller_identity.this.id == "000000000000" }
+
+  triggers = {
+    source_code_hash = module.lambda[each.key].lambda_function_source_code_hash
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      AWS_REGION=us-east-1 \
+      AWS_ACCESS_KEY_ID=test \
+      AWS_SECRET_ACCESS_KEY=test \
+      AWS_ENDPOINT_URL=http://localhost:4566 \
+      aws lambda update-function-code \
+        --function-name ${module.lambda[each.key].lambda_function_name} \
+        --s3-bucket hot-reload \
+        --s3-key "${each.value.path}"
+    EOT
+  }
+
+  depends_on = [module.lambda, aws_s3_bucket.hot_reload]
+}
+
+resource "null_resource" "java_build" {
+  for_each = local.java_names
+
+  triggers = {
+    source_code_hash = md5(jsonencode({
+      for file in fileset(format("%s/../backend/%s", path.module, each.key), "**/*") :
+      file => {
+        size = try(filesize(format("%s/../backend/%s/%s", path.module, each.key, file)), 0)
+      }
+    }))
+  }
+
+  provisioner "local-exec" {
+    command = join(" && ", each.value.mvn_cmd)
+  }
+}
+
+resource "aws_lambda_permission" "public_function_url" {
+  for_each               = local.function_names
+  statement_id           = "AllowPublicFunctionURLInvoke"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = module.lambda[each.key].lambda_function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ACME Architecture | Modern View</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --ink: #132238;
+      --muted: #4f5f74;
+      --line: #cfd9e8;
+      --glass: rgba(255, 255, 255, 0.72);
+      --blue: #0f4fbc;
+      --teal: #007f73;
+      --amber: #9a5a00;
+      --rose: #a43759;
+      --purple: #5c4dc6;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 6% 8%, #ffffff 0%, #eef4ff 36%, transparent 56%),
+        radial-gradient(circle at 92% 18%, #fff7ef 0%, #f7eef8 32%, transparent 54%),
+        linear-gradient(145deg, #f5f8ff, #f7f9fd);
+    }
+
+    .wrap {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 26px 18px 32px;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      background: var(--glass);
+      backdrop-filter: blur(6px);
+      border-radius: 20px;
+      padding: 20px 22px;
+      box-shadow: 0 12px 40px rgba(20, 55, 115, 0.1);
+      margin-bottom: 16px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 34px;
+      letter-spacing: 0.2px;
+      color: #133d96;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      max-width: 980px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.85);
+      color: #2d405c;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .board {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+      background: #ffffff;
+      box-shadow: 0 14px 50px rgba(16, 49, 108, 0.14);
+    }
+
+    .diagram {
+      padding: 12px;
+      overflow-x: auto;
+      background: linear-gradient(180deg, #ffffff, #f9fbff 55%, #fdfefe);
+    }
+
+    svg {
+      min-width: 1320px;
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #ffffff;
+      padding: 14px 16px;
+    }
+
+    .card h2 {
+      margin: 0 0 8px;
+      color: #18428f;
+      font-size: 19px;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: #334863;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      border: 1px solid #dbe5f1;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #f1f6ff; }
+
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+      .title { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1 class="title">ACME Platform Architecture</h1>
+      <p class="subtitle">Modern architecture view with semantic shape language and explicit lanes for user experience, edge, gateway, service domains, analytics decisions, persistence, and deployment controls.</p>
+      <div class="legend">
+        <span class="chip">Circle: Actor</span>
+        <span class="chip">Cloud: Edge Layer</span>
+        <span class="chip">Hexagon: Core Stack</span>
+        <span class="chip">Diamond: Decision Point</span>
+        <span class="chip">Cylinder: Data Store</span>
+        <span class="chip">Rounded Card: Domain Service</span>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="diagram">
+        <svg viewBox="0 0 1640 980" xmlns="http://www.w3.org/2000/svg" aria-labelledby="ttl dsc" role="img">
+          <title id="ttl">ACME modern architecture diagram</title>
+          <desc id="dsc">Layered architecture of frontend, edge, gateway, services, analytics, and database with control and dependency flows.</desc>
+          <defs>
+            <linearGradient id="laneBg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="100%" stop-color="#f8fbff"/>
+            </linearGradient>
+            <linearGradient id="dbGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ffe9f0"/>
+              <stop offset="100%" stop-color="#ffe0e9"/>
+            </linearGradient>
+            <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0 0L10 5L0 10z" fill="#4f6487"/>
+            </marker>
+            <style>
+              .lane { fill: url(#laneBg); stroke: #d4dfef; stroke-width: 1.2; stroke-dasharray: 8 6; }
+              .s-hdr { font: 700 14px 'Space Grotesk', sans-serif; fill: #3b4f6d; letter-spacing: 0.2px; }
+              .s-title { font: 700 16px 'Space Grotesk', sans-serif; fill: #183f89; }
+              .s-txt { font: 13px 'Space Grotesk', sans-serif; fill: #1b304e; }
+              .s-tiny { font: 12px 'Space Grotesk', sans-serif; fill: #556a86; }
+              .flow { fill: none; stroke: #4f6487; stroke-width: 1.9; marker-end: url(#arrow); }
+              .dep { fill: none; stroke: #6c82a3; stroke-width: 1.5; stroke-dasharray: 7 5; marker-end: url(#arrow); }
+              .n { rx: 14; ry: 14; stroke-width: 1.6; }
+            </style>
+          </defs>
+
+          <rect x="10" y="10" width="1620" height="960" rx="18" fill="#fbfdff" stroke="#d8e3f1"/>
+
+          <rect class="lane" x="24" y="34" width="450" height="228" rx="12"/>
+          <rect class="lane" x="486" y="34" width="280" height="228" rx="12"/>
+          <rect class="lane" x="778" y="34" width="838" height="560" rx="12"/>
+          <rect class="lane" x="1060" y="606" width="556" height="190" rx="12"/>
+
+          <text class="s-hdr" x="38" y="54">LANE · USER + FRONTEND</text>
+          <text class="s-hdr" x="500" y="54">LANE · EDGE</text>
+          <text class="s-hdr" x="792" y="54">LANE · GATEWAY + SERVICES</text>
+          <text class="s-hdr" x="1074" y="626">LANE · DATA + ANALYTICS DEPENDENCY</text>
+
+          <circle cx="106" cy="142" r="56" fill="#e8f9f1" stroke="#83b7a2" stroke-width="2"/>
+          <text class="s-title" x="79" y="142">User</text>
+          <text class="s-tiny" x="58" y="162">Desktop/Mobile</text>
+
+          <rect x="192" y="82" width="262" height="126" class="n" fill="#e8f9f1" stroke="#8bb7a8"/>
+          <text class="s-title" x="208" y="108">Frontend Application</text>
+          <text class="s-txt" x="208" y="132">React + Vite + MUI + Recharts</text>
+          <text class="s-txt" x="208" y="152">Axios interceptor (JWT)</text>
+          <text class="s-tiny" x="208" y="173">Protected routes + role-gated admin path</text>
+
+          <path d="M560 82 C530 82 515 98 515 117 C492 117 480 132 480 146 C480 164 495 178 520 178 L690 178 C717 178 734 161 734 141 C734 121 718 106 696 105 C694 91 678 82 660 82 Z" fill="#eeeaff" stroke="#9f96d8" stroke-width="2"/>
+          <text class="s-title" x="538" y="134">CloudFront Edge</text>
+          <text class="s-tiny" x="534" y="154">API behavior, SPA rewrite, custom headers</text>
+
+          <polygon points="820,86 918,86 966,146 918,206 820,206 772,146" fill="#e8f6ff" stroke="#84afcf" stroke-width="2"/>
+          <text class="s-title" x="796" y="132">Core API Stack</text>
+          <text class="s-txt" x="805" y="152">FastAPI + Mangum</text>
+          <text class="s-tiny" x="804" y="172">Unified ingress: /api/*</text>
+
+          <rect x="998" y="86" width="258" height="122" class="n" fill="#e8f1ff" stroke="#8da7c7"/>
+          <text class="s-title" x="1014" y="112">Unified Gateway Router</text>
+          <text class="s-txt" x="1014" y="136">Dynamic service loading</text>
+          <text class="s-txt" x="1014" y="156">Header normalization (Authorization)</text>
+          <text class="s-tiny" x="1014" y="176">X-Workshop-Token validation</text>
+
+          <polygon points="1328,96 1398,146 1328,196 1258,146" fill="#fff2dc" stroke="#c79f5d" stroke-width="2"/>
+          <text class="s-title" x="1291" y="143">Auth?</text>
+          <text class="s-tiny" x="1280" y="162">JWT + RBAC</text>
+
+          <rect x="826" y="272" width="182" height="96" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="844" y="299">auth-service</text>
+          <text class="s-tiny" x="844" y="319">/login /register /me /users</text>
+          <text class="s-tiny" x="844" y="338">Token issue + role claims</text>
+
+          <rect x="1022" y="272" width="182" height="96" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="1038" y="299">employees-service</text>
+          <text class="s-tiny" x="1038" y="319">Employee CRUD</text>
+          <text class="s-tiny" x="1038" y="338">Manager scope checks</text>
+
+          <rect x="1218" y="272" width="182" height="96" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="1238" y="299">reviews-service</text>
+          <text class="s-tiny" x="1238" y="319">Review CRUD + rating checks</text>
+          <text class="s-tiny" x="1238" y="338">Ownership enforcement</text>
+
+          <rect x="1414" y="272" width="182" height="96" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="1438" y="299">goals-service</text>
+          <text class="s-tiny" x="1438" y="319">Goal CRUD + /progress</text>
+          <text class="s-tiny" x="1438" y="338">Status by progress</text>
+
+          <rect x="924" y="382" width="218" height="96" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="942" y="408">competencies-service</text>
+          <text class="s-tiny" x="942" y="428">Catalog + employee assessments</text>
+          <text class="s-tiny" x="942" y="447">Upsert assessments</text>
+
+          <rect x="1158" y="382" width="206" height="96" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="1178" y="408">training-service</text>
+          <text class="s-tiny" x="1178" y="428">Training records CRUD</text>
+          <text class="s-tiny" x="1178" y="447">Manager restrictions</text>
+
+          <rect x="1380" y="382" width="216" height="96" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="1400" y="408">development-service</text>
+          <text class="s-tiny" x="1400" y="428">Development plan CRUD</text>
+          <text class="s-tiny" x="1400" y="447">Admin/Manager/HR writes</text>
+
+          <polygon points="1026,500 1118,500 1162,550 1118,600 1026,600 982,550" fill="#fff2dc" stroke="#c79f5d" stroke-width="2"/>
+          <text class="s-title" x="1010" y="546">Decision Logic</text>
+          <text class="s-tiny" x="1016" y="566">Attrition | Potential | Gaps</text>
+
+          <rect x="1182" y="500" width="414" height="102" class="n" fill="#fff7ea" stroke="#caa97a"/>
+          <text class="s-title" x="1202" y="528">analytics-service</text>
+          <text class="s-txt" x="1202" y="549">/skill-gaps | /high-potentials | /attrition-risks | /distribution/skills</text>
+          <text class="s-tiny" x="1202" y="570">Cross-domain joins on employees, goals, reviews, competencies</text>
+
+          <ellipse cx="1310" cy="676" rx="210" ry="28" fill="#ffe4ec" stroke="#b97f90" stroke-width="2"/>
+          <rect x="1100" y="676" width="420" height="96" fill="url(#dbGrad)" stroke="#b97f90" stroke-width="2"/>
+          <ellipse cx="1310" cy="772" rx="210" ry="28" fill="#ffdee8" stroke="#b97f90" stroke-width="2"/>
+          <text class="s-title" x="1256" y="712">PostgreSQL</text>
+          <text class="s-txt" x="1200" y="734">Local Docker + Cloud Aurora</text>
+          <text class="s-tiny" x="1195" y="754">Service schema init + seed data on startup/cold start</text>
+
+          <polygon points="238,632 326,578 414,632 414,730 326,784 238,730" fill="#e9f8ff" stroke="#83aac7" stroke-width="2"/>
+          <text class="s-title" x="272" y="648">Core Stack</text>
+          <text class="s-tiny" x="266" y="668">Frontend: React/Vite</text>
+          <text class="s-tiny" x="260" y="688">Gateway: FastAPI/Mangum</text>
+          <text class="s-tiny" x="262" y="708">Infra: Terraform/AWS</text>
+
+          <rect x="450" y="618" width="620" height="166" class="n" fill="#edeaff" stroke="#9589d2"/>
+          <text class="s-title" x="470" y="646">Deployment and Security Controls</text>
+          <text class="s-txt" x="470" y="668">CloudFront OAC + origin policies + SPA rewrite function</text>
+          <text class="s-txt" x="470" y="690">Lambda Function URL with AWS_IAM authorization</text>
+          <text class="s-txt" x="470" y="712">Gateway gate: workshop token + auth header handling</text>
+          <text class="s-tiny" x="470" y="734">Local runtime: frontend:3000 -> backend:8000 -> db:5434->5432</text>
+          <text class="s-tiny" x="470" y="754">Cloud runtime: S3 + CloudFront + Lambda URL + Aurora PostgreSQL</text>
+
+          <path class="flow" d="M162 142 L192 142"/>
+          <path class="flow" d="M454 142 L486 142"/>
+          <path class="flow" d="M734 146 L772 146"/>
+          <path class="flow" d="M966 146 L998 146"/>
+          <path class="flow" d="M1256 146 L1258 146"/>
+
+          <path class="flow" d="M1328 196 L1328 258 L1112 258 L1112 272"/>
+          <path class="flow" d="M1112 478 L1112 550 L1182 550"/>
+
+          <path class="dep" d="M1388 602 L1368 676"/>
+
+          <text class="s-tiny" x="1408" y="130">No -> 401/403</text>
+          <text class="s-tiny" x="1408" y="149">Yes -> route request</text>
+
+          <text class="s-tiny" x="58" y="844">Testing status: auth, employees, analytics covered; extend to reviews/goals/competencies/training/development and gateway ID path contracts.</text>
+          <text class="s-tiny" x="58" y="866">Hardening priorities: secret externalization, delete-policy consistency, path normalization across gateway and services.</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Flow Narrative</h2>
+        <ul>
+          <li>User enters through React frontend with JWT-aware API client and route guards.</li>
+          <li>CloudFront handles edge routing, SPA rewriting, and API header policy.</li>
+          <li>FastAPI gateway validates request context and dispatches to isolated service modules.</li>
+          <li>Service domains enforce RBAC and manager ownership checks before data operations.</li>
+          <li>Analytics service consolidates domain data into strategic insights endpoints.</li>
+          <li>PostgreSQL persists operational records and supports aggregations for analytics.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>At A Glance Matrix</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Layer</th>
+              <th>Technology</th>
+              <th>Key Responsibility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Frontend</td>
+              <td>React + Vite + MUI</td>
+              <td>UX, protected routes, API integration</td>
+            </tr>
+            <tr>
+              <td>Edge</td>
+              <td>CloudFront</td>
+              <td>Traffic routing and edge security headers</td>
+            </tr>
+            <tr>
+              <td>Gateway</td>
+              <td>FastAPI + Mangum</td>
+              <td>Unified ingress and service dispatch</td>
+            </tr>
+            <tr>
+              <td>Domains</td>
+              <td>Python services</td>
+              <td>Business logic and RBAC enforcement</td>
+            </tr>
+            <tr>
+              <td>Data</td>
+              <td>PostgreSQL</td>
+              <td>Operational persistence and analytics joins</td>
+            </tr>
+            <tr>
+              <td>Infra</td>
+              <td>Terraform + AWS</td>
+              <td>Deployment, permissions, and runtime wiring</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+    </section>
+  </div>
+</body>
+</html>

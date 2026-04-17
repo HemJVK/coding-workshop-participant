@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ACME Project Demo Master Briefing</title>
+  <style>
+    :root {
+      --bg: #f5f8fc;
+      --paper: #ffffff;
+      --ink: #0f172a;
+      --muted: #334155;
+      --accent: #0b57d0;
+      --ok: #1b8a3d;
+      --warn: #cc7a00;
+      --danger: #b42318;
+      --line: #dbe5f2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    .page {
+      max-width: 1100px;
+      margin: 24px auto;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 32px;
+    }
+    h1, h2, h3 { margin-top: 0; }
+    h1 { color: var(--accent); font-size: 30px; }
+    h2 { color: #0a3f97; font-size: 22px; border-bottom: 2px solid var(--line); padding-bottom: 6px; }
+    h3 { color: #09357f; font-size: 18px; margin-top: 20px; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 20px;
+      margin-bottom: 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .callout {
+      border-left: 5px solid var(--accent);
+      background: #eef4ff;
+      padding: 12px 14px;
+      margin: 14px 0;
+      border-radius: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 18px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #eff5ff; }
+    ul, ol { margin-top: 6px; }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #eef2f7;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .status-ok { color: var(--ok); font-weight: 700; }
+    .status-warn { color: var(--warn); font-weight: 700; }
+    .status-risk { color: var(--danger); font-weight: 700; }
+    .small { font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>ACME Performance Platform - Demo Master Briefing</h1>
+    <div class="meta">
+      <div><strong>Prepared for:</strong> Workshop demo and architecture review panel</div>
+      <div><strong>Date:</strong> April 17, 2026</div>
+      <div><strong>Project:</strong> coding-workshop-participant</div>
+      <div><strong>Focus:</strong> End-to-end architecture, edge cases, and technical specifications</div>
+    </div>
+
+    <div class="callout">
+      <strong>Executive Positioning:</strong> This platform unifies HR operations and people analytics under one secure API surface. It delivers measurable business insights (attrition risk, high potentials, skill gaps) while maintaining clear role-based controls and service boundaries.
+    </div>
+
+    <h2>1. Business Value Story</h2>
+    <ul>
+      <li>Centralizes employee performance, competency, goals, development, and training data into one navigable system.</li>
+      <li>Answers strategic workforce questions via dedicated analytics endpoints, not just raw CRUD records.</li>
+      <li>Supports role-aware operating model: Admin, Manager, HR, Employee.</li>
+      <li>Provides production-shaped deployment path for both local and AWS serverless modes.</li>
+    </ul>
+
+    <h2>2. System Architecture Overview</h2>
+    <h3>2.1 Entry and Routing</h3>
+    <ul>
+      <li>Frontend (React + Vite + MUI) sends requests through Axios to <code>/api/*</code>.</li>
+      <li>FastAPI gateway (<code>backend/main.py</code>) is the unified backend ingress.</li>
+      <li>Gateway dynamically loads and dispatches each backend service module at runtime.</li>
+      <li>Cloud path uses CloudFront + Lambda Function URL + IAM authorization.</li>
+    </ul>
+
+    <h3>2.2 Backend Service Domains</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Purpose</th>
+          <th>Core Endpoints</th>
+          <th>Role Controls</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>auth-service</td>
+          <td>Authentication, registration, user profile, user admin</td>
+          <td>/login, /register, /me, /users</td>
+          <td>Admin-only user administration</td>
+        </tr>
+        <tr>
+          <td>employees-service</td>
+          <td>Employee master records</td>
+          <td>GET/POST/PUT/DELETE employees</td>
+          <td>Manager scope by managed employees; admin delete</td>
+        </tr>
+        <tr>
+          <td>reviews-service</td>
+          <td>Performance reviews and ratings</td>
+          <td>GET/POST/PUT/DELETE reviews</td>
+          <td>Manager scope checks + admin delete</td>
+        </tr>
+        <tr>
+          <td>goals-service</td>
+          <td>Goal tracking + progress endpoint</td>
+          <td>CRUD goals, <code>/id/progress</code></td>
+          <td>Manager scope checks, role-based delete</td>
+        </tr>
+        <tr>
+          <td>competencies-service</td>
+          <td>Competency catalog + employee assessments</td>
+          <td>CRUD competencies, <code>/employee/{id}</code></td>
+          <td>Role checks for create/update/delete</td>
+        </tr>
+        <tr>
+          <td>training-service</td>
+          <td>Training records lifecycle</td>
+          <td>GET/POST/PUT/DELETE records</td>
+          <td>Manager employee-scope enforcement</td>
+        </tr>
+        <tr>
+          <td>development-service</td>
+          <td>Development plans</td>
+          <td>GET/POST/PUT/DELETE plans</td>
+          <td>Role + manager scope checks</td>
+        </tr>
+        <tr>
+          <td>analytics-service</td>
+          <td>Workforce intelligence aggregation</td>
+          <td>/skill-gaps, /high-potentials, /attrition-risks, /distribution/skills</td>
+          <td>User required; manager-scoped data filters</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3. Security and Identity</h2>
+    <h3>3.1 Authentication</h3>
+    <ul>
+      <li>JWT issued by <code>auth-service</code> with 8-hour expiry and role claims.</li>
+      <li>Frontend stores session token and user metadata in browser local storage.</li>
+      <li>Axios request interceptor injects bearer token automatically.</li>
+      <li>Response interceptor performs global 401 handling and forced logout redirect.</li>
+    </ul>
+
+    <h3>3.2 Authorization</h3>
+    <ul>
+      <li>UI route-level guard for authenticated and role-specific pages (for example admin page).</li>
+      <li>Backend service-level checks enforce true authorization regardless of UI state.</li>
+      <li>Manager-specific access patterns enforce ownership scope by <code>manager_id</code>.</li>
+    </ul>
+
+    <h3>3.3 Infrastructure Edge Security</h3>
+    <ul>
+      <li>CloudFront sets workshop token header for gateway admission checks.</li>
+      <li>Lambda Function URL is IAM protected.</li>
+      <li>CloudFront origin request policy forwards viewer headers except host for API compatibility.</li>
+    </ul>
+
+    <h2>4. Data and Persistence Design</h2>
+    <ul>
+      <li>PostgreSQL is the persistence backbone across services.</li>
+      <li>Each service defines own schema bootstrap with <code>CREATE TABLE IF NOT EXISTS</code>.</li>
+      <li>Cold start/startup performs database initialization with seed records for demo readiness.</li>
+      <li>Connection strategy relies on module-level reusable connection object for warm invocation efficiency.</li>
+    </ul>
+
+    <h2>5. Frontend UX Architecture</h2>
+    <ul>
+      <li>React Router protected route model with dedicated auth guard.</li>
+      <li>Dashboard aggregates analytics and employee status concurrently using <code>Promise.all</code>.</li>
+      <li>KPI cards and tables expose operational and strategic metrics side-by-side.</li>
+      <li>Employee detail page composes reviews, competencies, training, goals, and plans into one profile pane.</li>
+    </ul>
+
+    <h2>6. Demo Script (High-Confidence Flow)</h2>
+    <ol>
+      <li>Sign in with seeded admin account to establish quick access and credibility.</li>
+      <li>Show dashboard KPIs and explain business meaning of each metric.</li>
+      <li>Open employee profile deep link and demonstrate cross-domain data consistency.</li>
+      <li>Show role-aware behavior by explaining admin-only route and backend role enforcement.</li>
+      <li>Demonstrate one update operation and one analytics view refresh.</li>
+      <li>Close with infrastructure narrative: same app shape from local Docker to AWS serverless.</li>
+    </ol>
+
+    <h2>7. Verified Strengths for Evaluation Criteria</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Criterion</th>
+          <th>Current State</th>
+          <th>Evidence Type</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Role-based access</td>
+          <td><span class="status-ok">Implemented</span></td>
+          <td>JWT role claims + route guards + backend checks</td>
+        </tr>
+        <tr>
+          <td>CRUD coverage</td>
+          <td><span class="status-ok">Implemented</span> across domain services</td>
+          <td>Service handlers in all domain folders</td>
+        </tr>
+        <tr>
+          <td>Business analytics</td>
+          <td><span class="status-ok">Implemented</span> with focused endpoints</td>
+          <td>analytics-service aggregations</td>
+        </tr>
+        <tr>
+          <td>Deployment architecture</td>
+          <td><span class="status-ok">Implemented</span> local + cloud path</td>
+          <td>Docker compose + Terraform stack</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>8. Edge Cases and Technical Risks (Precise)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Area</th>
+          <th>Risk</th>
+          <th>Impact</th>
+          <th>Recommended Mitigation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Gateway path translation</td>
+          <td>Gateway forwards stripped path (for example <code>/123</code>) while many services parse IDs expecting at least 2 path parts.</td>
+          <td><span class="status-risk">High</span> for read-by-id/update/delete correctness.</td>
+          <td>Normalize forwarded path to include service segment or relax service parser to accept single-segment IDs.</td>
+        </tr>
+        <tr>
+          <td>Secrets defaults</td>
+          <td>Default JWT secret/password values in code and compose.</td>
+          <td><span class="status-risk">High</span> in real deployment if unchanged.</td>
+          <td>Use environment-managed secrets (AWS Secrets Manager/SSM) and fail fast when missing.</td>
+        </tr>
+        <tr>
+          <td>Service map startup</td>
+          <td><code>health</code> entry exists in map but has null target; startup still iterates map.</td>
+          <td><span class="status-warn">Medium</span> noisy startup logs.</td>
+          <td>Skip non-service sentinel keys during initialization loop.</td>
+        </tr>
+        <tr>
+          <td>Test breadth</td>
+          <td>Automated tests currently focus on auth, employees, analytics.</td>
+          <td><span class="status-warn">Medium</span> compared to broad coverage goals.</td>
+          <td>Add tests for reviews, goals, competencies, training, development and gateway path edge behavior.</td>
+        </tr>
+        <tr>
+          <td>Delete semantics</td>
+          <td>Mixed hard-delete and soft-delete patterns across services.</td>
+          <td><span class="status-warn">Medium</span> inconsistency for auditing/data retention.</td>
+          <td>Define platform-wide data lifecycle policy and align implementations.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>9. Test and Quality Position</h2>
+    <ul>
+      <li>Auth happy path and invalid credential handling are tested.</li>
+      <li>Employee listing and unauthorized creation checks are tested.</li>
+      <li>Analytics endpoint transformations are tested.</li>
+      <li>Remaining domain services should be covered to match workshop stretch goals (80/90/100 style targets in docs).</li>
+    </ul>
+
+    <h2>10. Technical Specifications Snapshot</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Technology</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Frontend</td>
+          <td>React 19, Vite, MUI, Axios, Recharts</td>
+          <td>Role-guarded routes and analytics dashboard</td>
+        </tr>
+        <tr>
+          <td>Gateway</td>
+          <td>FastAPI + Mangum</td>
+          <td>Unified route ingress for all services</td>
+        </tr>
+        <tr>
+          <td>Services</td>
+          <td>Python Lambda-style handlers</td>
+          <td>Domain-specific business logic + RBAC checks</td>
+        </tr>
+        <tr>
+          <td>Data</td>
+          <td>PostgreSQL</td>
+          <td>Service-level schemas and seeded bootstrap data</td>
+        </tr>
+        <tr>
+          <td>Infrastructure</td>
+          <td>Terraform + AWS (S3, CloudFront, Lambda URL, RDS)</td>
+          <td>LocalStack-aware patterns for local mode</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>11. Panel Q and A - Strong Answers</h2>
+    <h3>Q: Why one gateway instead of separate API endpoints?</h3>
+    <p>A: It simplifies external ingress, security policy, and client integration while preserving service-domain boundaries internally.</p>
+
+    <h3>Q: How is authorization enforced beyond the UI?</h3>
+    <p>A: Backend handlers use token-derived user context and explicit role checks in each service function. UI guards only improve UX, not security boundary.</p>
+
+    <h3>Q: What is your biggest technical risk and fix plan?</h3>
+    <p>A: Path-to-ID parsing mismatch risk in gateway/service boundary. Planned fix is deterministic path contract normalization and regression tests for all entity ID routes.</p>
+
+    <h3>Q: What makes this more than a CRUD app?</h3>
+    <p>A: Analytics service provides targeted workforce intelligence from correlated datasets: low performers (attrition risk), high-potential talent, and competency gaps by category.</p>
+
+    <h2>12. Conclusion</h2>
+    <p>
+      This project demonstrates a practical, deployable, and business-oriented microservice architecture with strong foundations in auth/RBAC, modular domain services, and decision-grade analytics.
+      The immediate improvement path is clear and tractable: tighten gateway path contracts, harden secret management, and broaden automated test coverage.
+    </p>
+
+    <p class="small">Companion file: architecture-diagram.html (full visual architecture map and request flow).</p>
+  </div>
+</body>
+</html>

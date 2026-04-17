@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# Script: Participant Setup and Configuration
+# Purpose: Configure AWS credentials and Terraform backend for workshop participant
+# Usage: ./setup-participant.sh
+
+set -e
+
+# Usage helper
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "Usage: $0"
+    echo "Configure AWS credentials and Terraform backend for workshop participant"
+    echo ""
+    echo "Description:"
+    echo "  Loads participant configuration, retrieves temporary AWS"
+    echo "  credentials from workshop API, and creates environment"
+    echo "  configuration for deployment scripts"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help      Show this help message"
+    echo ""
+    echo "Requirements:"
+    echo "  - aws cli installed"
+    echo "  - curl and jq installed"
+    echo ""
+    echo "Output:"
+    echo "  Creates ENVIRONMENT.config with AWS credentials"
+    exit 0
+fi
+
+echo "==================================="
+echo "Coding Workshop - Participant Setup"
+echo "==================================="
+echo ""
+
+# Verify required dependencies
+aws --version > /dev/null 2>&1 || { echo "ERROR: 'aws' is missing. Aborting..."; exit 1; }
+curl --version > /dev/null 2>&1 || { echo "ERROR: 'curl' is missing. Aborting..."; exit 1; }
+jq --version > /dev/null 2>&1 || { echo "ERROR: 'jq' is missing. Aborting..."; exit 1; }
+
+# Resolve script directory and project root paths
+SCRIPT_DIR="$(cd "$(dirname "$0")" > /dev/null 2>&1 || exit 1; pwd -P)"
+PROJECT_ROOT="$(cd $SCRIPT_DIR/.. > /dev/null 2>&1 || exit 1; pwd -P)"
+PROJECT_NAME="coding-workshop"
+DOMAIN_NAME="codingworkshop.net"
+
+# Source variables from .env if it exists
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    echo "Loading variables from .env..."
+    # Parse without exporting unnecessary quoting
+    export EVENT_ID="${EVENT_ID:-$(grep -i '^Event_ID=' "$PROJECT_ROOT/.env" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//' | xargs)}"
+    export PARTICIPANT_ID="${PARTICIPANT_ID:-$(grep -i '^Participant_ID=' "$PROJECT_ROOT/.env" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//' | xargs)}"
+    export PARTICIPANT_CODE="${PARTICIPANT_CODE:-$(grep -i '^Participant_Code=' "$PROJECT_ROOT/.env" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//' | xargs)}"
+    export AWS_REGION="${AWS_REGION:-$(grep -i '^AWS_Region=' "$PROJECT_ROOT/.env" | cut -d '=' -f2- | sed -e 's/^"//' -e 's/"$//' | xargs)}"
+fi
+
+if [ -z "$EVENT_ID" ]; then EVENT_ID="abcd1234"; fi
+
+# Retrieve DNS TXT record
+echo "Retrieve DNS TXT record..."
+CURRENT_RECORD=$(dig +short TXT "$DOMAIN_NAME" | tr -d '"')
+while IFS='=' read -r key value; do
+    key=$(echo "$key" | xargs)
+    if [ -n "$key" ] && [ "$key" = "$EVENT_ID" ]; then
+        PARTICIPANT_URL=$(echo "$value" | xargs)
+    fi
+done < <(echo "$CURRENT_RECORD" | tr ' ' '\n' | grep '=')
+
+# If Participant URL not found via DNS, check for local config
+echo "INFO: PARTICIPANT_URL=$PARTICIPANT_URL"
+if [ -z "$PARTICIPANT_URL" ] && [ -f "$PROJECT_ROOT/ENVIRONMENT.config" ]; then
+    source $PROJECT_ROOT/ENVIRONMENT.config
+fi
+
+# Validate that Participant URL was retrieved successfully
+if [ -z "$PARTICIPANT_URL" ]; then
+    echo "ERROR: PARTICIPANT_URL not found for event ID '$EVENT_ID'. Aborting..."
+    exit 1
+fi
+
+case "$PARTICIPANT_URL" in
+    http*) ;;
+    *) PARTICIPANT_URL="https://$PARTICIPANT_URL" ;;
+esac
+
+if [ -z "$PARTICIPANT_ID" ]; then
+    echo "ERROR: PARTICIPANT_ID not found. Aborting..."
+    exit 1
+fi
+
+if [ -z "$PARTICIPANT_CODE" ]; then
+    echo "ERROR: PARTICIPANT_CODE not found. Aborting..."
+    exit 1
+fi
+
+# Retrieve temporary AWS credentials from workshop API
+echo "Retrieving temporary AWS credentials..."
+JSON=$(curl -H "x-id: $PARTICIPANT_ID" -H "x-code: $PARTICIPANT_CODE" $PARTICIPANT_URL) || {
+    echo "ERROR: Failed to retrieve temporary AWS credentials. Aborting..."
+    exit 1
+}
+
+# Configure AWS CLI profile with temporary credentials
+echo "Setting up the AWS CLI..."
+AWS_ACCESS_KEY_ID="$(echo $JSON | jq -r '.AccessKeyId')"
+aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY="$(echo $JSON | jq -r '.SecretAccessKey')"
+aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN="$(echo $JSON | jq -r '.SessionToken')"
+aws configure set aws_session_token $AWS_SESSION_TOKEN
+
+# Auto-detect AWS Account ID from credentials
+echo "Auto-detecting AWS Account ID..."
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text) || {
+    echo "ERROR: Failed to retrieve AWS Account ID. Aborting..."
+    exit 1
+}
+
+# Verify AWS Account ID was retrieved successfully
+if [ -z "$AWS_ACCOUNT_ID" ]; then
+    echo "ERROR: Could not detect AWS Account ID."
+    echo ""
+    echo "Please ensure your AWS credentials are configured:"
+    echo "  export AWS_ACCESS_KEY_ID=your-key"
+    echo "  export AWS_SECRET_ACCESS_KEY=your-secret"
+    echo "  export AWS_SESSION_TOKEN=your-session-token"
+    echo ""
+    echo "Then run this script again."
+    exit 1
+fi
+
+# Derive participant-specific AWS resource names
+AWS_IAM_ROLE="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${PROJECT_NAME}-assume-${PARTICIPANT_ID}"
+AWS_S3_BUCKET="${PROJECT_NAME}-tfstate-${PARTICIPANT_ID}"
+
+echo "  ✓ AWS profile configured"
+echo ""
+
+# Create environment configuration file for deployment scripts
+ENVIRONMENT_CONFIG="$PROJECT_ROOT/ENVIRONMENT.config"
+cat > "$ENVIRONMENT_CONFIG" <<EOF
+# Auto-generated by setup-participant.sh
+# Participant ID: $PARTICIPANT_ID
+
+export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
+export AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"
+export AWS_REGION="$AWS_REGION"
+export AWS_ACCOUNT_ID="$AWS_ACCOUNT_ID"
+export AWS_IAM_ROLE="$AWS_IAM_ROLE"
+export AWS_S3_BUCKET="$AWS_S3_BUCKET"
+export PARTICIPANT_ID="$PARTICIPANT_ID"
+export PARTICIPANT_URL="$PARTICIPANT_URL"
+export PROJECT_NAME="$PROJECT_NAME"
+export TF_VAR_aws_app_code="$PARTICIPANT_ID"
+export TF_VAR_aws_project="$PROJECT_NAME"
+EOF
+
+echo "Created environment file: ENVIRONMENT.config"
+echo "  ✓ Environment configured"
+echo ""

@@ -274,3 +274,6 @@ backend/*/requirements.txt
 !backend/goals-service/requirements.txt
 !backend/reviews-service/requirements.txt
 !backend/training-service/requirements.txt
+
+
+.codex

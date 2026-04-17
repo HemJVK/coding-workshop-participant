@@ -15,6 +15,7 @@ import SnackbarAlert from '../components/SnackbarAlert';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { trainingService } from '../services/trainingService';
 import { employeeService } from '../services/employeeService';
+import { competencyService } from '../services/competencyService';
 import { authService } from '../services/authService';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, Legend, ResponsiveContainer,
@@ -23,7 +24,7 @@ import {
 const STATUSES = ['enrolled', 'in_progress', 'completed', 'cancelled'];
 const TYPES = ['online', 'classroom', 'certification', 'workshop', 'coaching'];
 const COLORS = { completed: '#2E7D32', in_progress: '#1565C0', enrolled: '#E65100', cancelled: '#9E9E9E' };
-const EMPTY = { employee_id: '', course_name: '', provider: '', training_type: 'online', completion_date: '', hours: '', status: 'enrolled', notes: '' };
+const EMPTY = { employee_id: '', course_name: '', provider: '', training_type: 'online', competency_id: '', completion_date: '', hours: '', status: 'enrolled', notes: '' };
 
 export default function TrainingPage() {
   const user = authService.getUser();
@@ -31,6 +32,7 @@ export default function TrainingPage() {
 
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [competencies, setCompetencies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [snack, setSnack] = useState({ open: false, msg: '', sev: 'success' });
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -45,9 +47,14 @@ export default function TrainingPage() {
     setLoading(true);
     try {
       const params = filterStatus ? { status: filterStatus } : {};
-      const [r, e] = await Promise.all([trainingService.list(params), employeeService.list({ status: 'active' })]);
+      const [r, e, c] = await Promise.all([
+        trainingService.list(params),
+        employeeService.list({ status: 'active' }),
+        competencyService.list(),
+      ]);
       setRecords(r.data);
       setEmployees(e.data);
+      setCompetencies(c.data);
     } catch { setSnack({ open: true, msg: 'Failed to load', sev: 'error' }); }
     finally { setLoading(false); }
   };
@@ -58,7 +65,7 @@ export default function TrainingPage() {
     setEditRec(rec);
     setForm(rec ? {
       employee_id: rec.employee_id, course_name: rec.course_name, provider: rec.provider || '',
-      training_type: rec.training_type || 'online', completion_date: rec.completion_date?.split('T')[0] || '',
+      training_type: rec.training_type || 'online', competency_id: rec.competency_id || '', completion_date: rec.completion_date?.split('T')[0] || '',
       hours: rec.hours || '', status: rec.status, notes: rec.notes || '',
     } : { ...EMPTY });
     setFormErr({});
@@ -69,6 +76,8 @@ export default function TrainingPage() {
     const errs = {};
     if (!form.employee_id) errs.employee_id = 'Select employee';
     if (!form.course_name.trim()) errs.course_name = 'Course name required';
+    if (!form.competency_id) errs.competency_id = 'Select competency';
+    if (form.status === 'completed' && !form.completion_date) errs.completion_date = 'Completion date required for completed training';
     setFormErr(errs);
     return !Object.keys(errs).length;
   };
@@ -139,7 +148,7 @@ export default function TrainingPage() {
                   <Table>
                     <TableHead><TableRow>
                       <TableCell>Employee</TableCell><TableCell>Course</TableCell><TableCell>Provider</TableCell>
-                      <TableCell>Hours</TableCell><TableCell>Status</TableCell><TableCell>Completed</TableCell>
+                      <TableCell>Competency</TableCell><TableCell>Hours</TableCell><TableCell>Status</TableCell><TableCell>Completed</TableCell>
                       {canWrite && <TableCell align="right">Actions</TableCell>}
                     </TableRow></TableHead>
                     <TableBody>
@@ -148,6 +157,7 @@ export default function TrainingPage() {
                           <TableCell><Typography variant="body2" fontWeight={600}>{getEmpName(r.employee_id)}</Typography></TableCell>
                           <TableCell sx={{ maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.course_name}</TableCell>
                           <TableCell>{r.provider || '—'}</TableCell>
+                          <TableCell>{r.competency_name || '—'}</TableCell>
                           <TableCell>{r.hours ? `${r.hours}h` : '—'}</TableCell>
                           <TableCell><Chip label={r.status.replace('_', ' ')} size="small" sx={{ bgcolor: `${COLORS[r.status]}20`, color: COLORS[r.status], fontWeight: 600, textTransform: 'capitalize' }} /></TableCell>
                           <TableCell>{r.completion_date ? new Date(r.completion_date).toLocaleDateString() : '—'}</TableCell>
@@ -170,7 +180,7 @@ export default function TrainingPage() {
               <Table>
                 <TableHead><TableRow>
                   <TableCell>Employee</TableCell><TableCell>Course</TableCell><TableCell>Provider</TableCell>
-                  <TableCell>Type</TableCell><TableCell>Hours</TableCell><TableCell>Status</TableCell>
+                  <TableCell>Competency</TableCell><TableCell>Type</TableCell><TableCell>Hours</TableCell><TableCell>Status</TableCell>
                   <TableCell>Completed</TableCell>{canWrite && <TableCell align="right">Actions</TableCell>}
                 </TableRow></TableHead>
                 <TableBody>
@@ -179,6 +189,7 @@ export default function TrainingPage() {
                       <TableCell fontWeight={600}>{getEmpName(r.employee_id)}</TableCell>
                       <TableCell>{r.course_name}</TableCell>
                       <TableCell>{r.provider || '—'}</TableCell>
+                      <TableCell>{r.competency_name || '—'}</TableCell>
                       <TableCell><Chip label={r.training_type} size="small" variant="outlined" /></TableCell>
                       <TableCell>{r.hours ? `${r.hours}h` : '—'}</TableCell>
                       <TableCell><Chip label={r.status.replace('_', ' ')} size="small" sx={{ bgcolor: `${COLORS[r.status]}20`, color: COLORS[r.status], fontWeight: 600, textTransform: 'capitalize' }} /></TableCell>
@@ -191,7 +202,7 @@ export default function TrainingPage() {
                       )}
                     </TableRow>
                   ))}
-                  {!records.length && <TableRow><TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>No training records found</TableCell></TableRow>}
+                  {!records.length && <TableRow><TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>No training records found</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </Paper>
@@ -225,6 +236,14 @@ export default function TrainingPage() {
                 </Select>
               </FormControl>
             </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small" error={!!formErr.competency_id}>
+                <InputLabel>Competency *</InputLabel>
+                <Select label="Competency *" value={form.competency_id} onChange={e => setForm({ ...form, competency_id: e.target.value })}>
+                  {competencies.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Grid>
             <Grid item xs={6}>
               <TextField fullWidth label="Hours" type="number" value={form.hours} onChange={e => setForm({ ...form, hours: e.target.value })} size="small" />
             </Grid>
@@ -237,7 +256,17 @@ export default function TrainingPage() {
               </FormControl>
             </Grid>
             <Grid item xs={12}>
-              <TextField fullWidth label="Completion Date" type="date" value={form.completion_date} onChange={e => setForm({ ...form, completion_date: e.target.value })} size="small" InputLabelProps={{ shrink: true }} />
+              <TextField
+                fullWidth
+                label="Completion Date"
+                type="date"
+                value={form.completion_date}
+                onChange={e => setForm({ ...form, completion_date: e.target.value })}
+                size="small"
+                error={!!formErr.completion_date}
+                helperText={formErr.completion_date}
+                InputLabelProps={{ shrink: true }}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField fullWidth multiline rows={2} label="Notes" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} size="small" />

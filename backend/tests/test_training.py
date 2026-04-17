@@ -24,9 +24,10 @@ def test_create_completed_training_updates_competencies(training_mock_db):
     token = auth_module.create_token(1, "admin@acme.com", "admin", "Admin User")
 
     cur.fetchone.side_effect = [
-        (11, 5, "Python for Data Science", "Coursera", "online", "2026-04-17", 30, "completed", None, None, "2026-04-17T10:00:00Z", "2026-04-17T10:00:00Z"),
+        (11, 5, "Python for Data Science", "Coursera", "online", None),
         (3, 4, "2026-04-17T10:00:00Z"),
         (5, 5, "2026-04-17T10:00:00Z"),
+        (11, 5, "Python for Data Science", "Coursera", "online", None, None, "2026-04-17", 30, "completed", None, None, "2026-04-17T10:00:00Z", "2026-04-17T10:00:00Z"),
     ]
     cur.fetchall.return_value = [
         ("Python", 1, 1, 2, 4),
@@ -64,11 +65,12 @@ def test_transition_to_completed_updates_competencies_once(training_mock_db):
     token = auth_module.create_token(1, "admin@acme.com", "admin", "Admin User")
 
     lookup_cursor = conn.cursor.return_value
-    lookup_cursor.fetchone.return_value = (5, "Docker & Kubernetes Fundamentals", "in_progress")
+    lookup_cursor.fetchone.return_value = (5, "Docker & Kubernetes Fundamentals", "in_progress", None)
 
     cur.fetchone.side_effect = [
-        (9, 5, "Docker & Kubernetes Fundamentals", "Linux Foundation", "online", "2026-04-17", 8, "completed", None, None, "2026-04-10T10:00:00Z", "2026-04-17T10:00:00Z"),
+        (9, 5, "Docker & Kubernetes Fundamentals", "Linux Foundation", "online", None),
         (4, 4, "2026-04-17T10:00:00Z"),
+        (9, 5, "Docker & Kubernetes Fundamentals", "Linux Foundation", "online", None, None, "2026-04-17", 8, "completed", None, None, "2026-04-10T10:00:00Z", "2026-04-17T10:00:00Z"),
     ]
     cur.fetchall.return_value = [
         ("Cloud Architecture", 1, 7, 3, 4),
@@ -98,13 +100,16 @@ def test_completed_training_is_not_double_counted_on_later_updates(training_mock
     token = auth_module.create_token(1, "admin@acme.com", "admin", "Admin User")
 
     lookup_cursor = conn.cursor.return_value
-    lookup_cursor.fetchone.return_value = (5, "Docker & Kubernetes Fundamentals", "completed")
+    lookup_cursor.fetchone.return_value = (5, "Docker & Kubernetes Fundamentals", "completed", None)
 
-    cur.fetchone.return_value = (
-        9, 5, "Docker & Kubernetes Fundamentals", "Linux Foundation", "online",
-        "2026-04-17", 8, "completed", None, "certificate added",
-        "2026-04-10T10:00:00Z", "2026-04-18T10:00:00Z"
-    )
+    cur.fetchone.side_effect = [
+        (9, 5, "Docker & Kubernetes Fundamentals", "Linux Foundation", "online", None),
+        (
+            9, 5, "Docker & Kubernetes Fundamentals", "Linux Foundation", "online",
+            None, None, "2026-04-17", 8, "completed", None, "certificate added",
+            "2026-04-10T10:00:00Z", "2026-04-18T10:00:00Z"
+        ),
+    ]
 
     event = {
         "httpMethod": "PUT",
@@ -121,3 +126,80 @@ def test_completed_training_is_not_double_counted_on_later_updates(training_mock
     body = json.loads(resp["body"])
     assert body["competency_updates"] == []
     assert not any("training_competency_mappings" in call.args[0] for call in cur.execute.call_args_list)
+
+
+def test_create_completed_training_uses_selected_competency(training_mock_db):
+    _, cur = training_mock_db
+    token = auth_module.create_token(1, "admin@acme.com", "admin", "Admin User")
+
+    cur.fetchone.side_effect = [
+        (15, 5, "Custom Python Coaching", "Internal", "coaching", 1),
+        ("Python",),
+        ("Python",),
+        (3, 4, "2026-04-17T10:00:00Z"),
+        (15, 5, "Custom Python Coaching", "Internal", "coaching", 1, "Python", "2026-04-17", 3, "completed", None, None, "2026-04-17T10:00:00Z", "2026-04-17T10:00:00Z"),
+    ]
+    cur.fetchall.return_value = [
+        ("Python", 1, 1, 2, 4),
+    ]
+
+    event = {
+        "httpMethod": "POST",
+        "path": "/training-service",
+        "headers": {"Authorization": f"Bearer {token}"},
+        "body": json.dumps({
+            "employee_id": 5,
+            "course_name": "Custom Python Coaching",
+            "provider": "Internal",
+            "training_type": "coaching",
+            "competency_id": 1,
+            "status": "completed",
+            "completion_date": "2026-04-17",
+            "hours": 3,
+        }),
+    }
+
+    resp = training_module.handler(event, None)
+    assert resp["statusCode"] == 201
+
+    body = json.loads(resp["body"])
+    assert body["competency_id"] == 1
+    assert body["competency_name"] == "Python"
+    assert len(body["competency_updates"]) == 1
+    assert body["competency_updates"][0]["competency_name"] == "Python"
+
+
+def test_completed_training_adds_competency_when_updated_later(training_mock_db):
+    conn, cur = training_mock_db
+    token = auth_module.create_token(1, "admin@acme.com", "admin", "Admin User")
+
+    lookup_cursor = conn.cursor.return_value
+    lookup_cursor.fetchone.return_value = (5, "Custom Python Coaching", "completed", None)
+
+    cur.fetchone.side_effect = [
+        (15, 5, "Custom Python Coaching", "Internal", "coaching", 1),
+        ("Python",),
+        ("Python",),
+        (3, 4, "2026-04-17T10:00:00Z"),
+        (15, 5, "Custom Python Coaching", "Internal", "coaching", 1, "Python", "2026-04-17", 3, "completed", None, None, "2026-04-10T10:00:00Z", "2026-04-17T10:00:00Z"),
+    ]
+    cur.fetchall.return_value = [
+        ("Python", 1, 1, 2, 4),
+    ]
+
+    event = {
+        "httpMethod": "PUT",
+        "path": "/training-service/15",
+        "headers": {"Authorization": f"Bearer {token}"},
+        "body": json.dumps({
+            "competency_id": 1,
+        }),
+    }
+
+    resp = training_module.handler(event, None)
+    assert resp["statusCode"] == 200
+
+    body = json.loads(resp["body"])
+    assert body["competency_id"] == 1
+    assert len(body["competency_updates"]) == 1
+    assert body["competency_updates"][0]["competency_name"] == "Python"

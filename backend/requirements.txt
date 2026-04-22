@@ -1,0 +1,4 @@
+psycopg[binary]==3.1.18
+PyJWT==2.8.0
+captcha==0.6.0
+bcrypt==4.1.2
